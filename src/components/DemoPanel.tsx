@@ -252,6 +252,20 @@ export const DemoPanel: React.FC = () => {
                 <span>3. Signup Page</span>
                 <ExternalLink className="w-3 h-3 text-slate-500" />
               </button>
+
+              <div className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mt-2.5 mb-1">
+                Academic Pages
+              </div>
+              <button
+                onClick={() => {
+                  setView("webrtc-live");
+                  setIsOpen(false);
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-900/30 hover:bg-slate-900/70 border border-slate-850 rounded-lg text-slate-300 text-xs transition-all text-left"
+              >
+                <span>4. Live Class Page</span>
+                <ExternalLink className="w-3 h-3 text-slate-500" />
+              </button>
             </div>
           </div>
         </div>
