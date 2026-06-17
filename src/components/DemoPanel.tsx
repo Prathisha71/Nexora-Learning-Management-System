@@ -18,7 +18,7 @@ import {
 
 export const DemoPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { setView, addNotification, isDarkMode, toggleDarkMode, boards } = useLmsStore();
+  const { setView, addNotification, isDarkMode, toggleDarkMode, boards, profile } = useLmsStore();
   const [loadingRole, setLoadingRole] = useState<string | null>(null);
 
   const handleSimulateRole = async (role: "student" | "teacher" | "admin") => {
@@ -181,6 +181,50 @@ export const DemoPanel: React.FC = () => {
                 <span>Admin</span>
               </button>
             </div>
+          </div>
+
+          {/* Simulate Academic Class */}
+          <div className="space-y-2 mb-4 border-t border-slate-800/40 pt-3">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+              Simulate Academic Class
+            </label>
+            <select
+              value={profile?.selectedClassId || ""}
+              onChange={(e) => {
+                const classId = e.target.value;
+                if (!classId || !profile) return;
+                
+                const currentBoards = useLmsStore.getState().boards;
+                const activeBoard = currentBoards.find(b => b.id === profile.selectedBoardId) || currentBoards[0];
+                const activeClass = activeBoard?.classes.find(c => c.id === classId);
+                const defaultSubjectId = activeClass?.subjects[0]?.id || "";
+
+                const updatedProfile = {
+                  ...profile,
+                  selectedClassId: classId,
+                  optedSubjectId: defaultSubjectId
+                };
+
+                useLmsStore.setState({
+                  profile: updatedProfile,
+                  activeSubjectId: defaultSubjectId
+                });
+
+                addNotification(
+                  "Class Context Updated",
+                  `Switched workspace view to ${activeClass?.title || 'selected class'}.`,
+                  "success"
+                );
+              }}
+              className="w-full bg-[#161b26] border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-brand-violet transition-colors"
+            >
+              <option value="" disabled>Select Class Level</option>
+              {boards.flatMap(b => b.classes).map((cls) => (
+                <option key={cls.id} value={cls.id}>
+                  {cls.title}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Simulate Real-Time Events */}
