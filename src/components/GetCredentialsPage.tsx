@@ -54,7 +54,7 @@ export const GetCredentialsPage: React.FC = () => {
             <span>Secure Activation Portal</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white font-display tracking-tight leading-none">
-            Nexora Learning Academy
+            Nexora Learning
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-lg mx-auto">
             Activate your scholar account subscription to retrieve your secure portal login credentials.

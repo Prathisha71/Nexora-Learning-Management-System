@@ -117,7 +117,7 @@ router.post('/signup', async (req, res) => {
         ? {
             teacherProfile: {
               create: {
-                bio: 'EduVerse instructor',
+                bio: 'Nexora Learning instructor',
                 qualification: 'Subject expert',
               },
             },
@@ -163,7 +163,7 @@ router.post('/signup', async (req, res) => {
       subject: 'Activate Your Nexora Learning Portal Credentials',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 0px; background-color: #ffffff;">
-          <h2 style="color: #4f46e5; text-align: center; margin-bottom: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Nexora Learning Academy</h2>
+          <h2 style="color: #4f46e5; text-align: center; margin-bottom: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Nexora Learning</h2>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">Hello ${firstName} ${lastName},</p>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">Welcome! Your scholar account has been successfully registered.</p>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">To retrieve your login email and temporary password, please activate your portal subscription. Click the button below to proceed to the secure activation page:</p>
