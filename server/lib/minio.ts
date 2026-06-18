@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
@@ -25,6 +25,29 @@ export const minioClient = new S3Client({
 
 export const MINIO_BUCKET = bucketName;
 
+const extensionToContentType: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
+  '.zip': 'application/zip',
+  '.m3u8': 'application/vnd.apple.mpegurl',
+  '.ts': 'video/mp2t',
+  '.mpd': 'application/dash+xml',
+  '.key': 'application/octet-stream',
+  '.json': 'application/json',
+};
+
+export function getContentTypeFromKey(key: string): string {
+  const ext = path.extname(key).toLowerCase();
+  return extensionToContentType[ext] || 'application/octet-stream';
+}
+
 /**
  * Upload a file buffer to MinIO
  */
@@ -43,7 +66,7 @@ export async function uploadToMinio(
       }),
     );
     // Return the public access URL for the uploaded file
-    return `${endpoint}/${MINIO_BUCKET}/${key}`;
+    return `${endpoint}/${MINIO_BUCKET}/${encodeURIComponent(key)}`;
   } catch (err) {
     console.warn('MinIO upload failed, using local disk fallback:', err);
     const localPath = path.join(process.cwd(), 'uploads', key);
@@ -54,6 +77,22 @@ export async function uploadToMinio(
     fs.writeFileSync(localPath, body);
     return `/uploads/${key}`;
   }
+}
+
+export async function uploadToMinioKey(
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<string> {
+  await minioClient.send(
+    new PutObjectCommand({
+      Bucket: MINIO_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+  return key;
 }
 
 /**
@@ -77,11 +116,23 @@ export async function deleteFromMinio(key: string): Promise<void> {
 }
 
 /**
+ * Stream a file from MinIO
+ */
+export async function getObjectFromMinio(key: string) {
+  return minioClient.send(
+    new GetObjectCommand({
+      Bucket: MINIO_BUCKET,
+      Key: key,
+    }),
+  );
+}
+
+/**
  * Generate a signed download URL (expires in 1 hour)
  */
 export async function getSignedDownloadUrl(key: string, expiresIn = 3600): Promise<string> {
   try {
-    const command = new PutObjectCommand({ Bucket: MINIO_BUCKET, Key: key });
+    const command = new GetObjectCommand({ Bucket: MINIO_BUCKET, Key: key });
     return await getSignedUrl(minioClient, command, { expiresIn });
   } catch (err) {
     console.warn('MinIO getSignedDownloadUrl failed, using local link fallback:', err);

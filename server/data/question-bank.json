@@ -245,6 +245,96 @@
       "options": ["B^T * A^T", "A^T * B^T", "AB", "BA"],
       "correctAnswerIndex": 0,
       "explanation": "The transpose of a product of matrices is the product of their transposes in reverse order: (AB)^T = B^T * A^T."
+    },
+    {
+      "question": "What is the trace of a square matrix?",
+      "options": ["The sum of its diagonal elements", "The product of its diagonal elements", "The determinant of the matrix", "The sum of all its elements"],
+      "correctAnswerIndex": 0,
+      "explanation": "The trace of a square matrix is defined as the sum of elements on the main diagonal."
+    },
+    {
+      "question": "For a square matrix A, if A^2 = A, then A is called:",
+      "options": ["Idempotent matrix", "Involutory matrix", "Nilpotent matrix", "Orthogonal matrix"],
+      "correctAnswerIndex": 0,
+      "explanation": "A matrix A is idempotent if multiplying it by itself yields the same matrix: A^2 = A."
+    },
+    {
+      "question": "For a square matrix A, if A^2 = I (Identity matrix), then A is called:",
+      "options": ["Involutory matrix", "Idempotent matrix", "Nilpotent matrix", "Orthogonal matrix"],
+      "correctAnswerIndex": 0,
+      "explanation": "A matrix A is involutory if it is its own inverse, i.e., A^2 = I."
+    },
+    {
+      "question": "For a square matrix A, if A^k = 0 for some positive integer k, then A is called:",
+      "options": ["Nilpotent matrix", "Idempotent matrix", "Involutory matrix", "Orthogonal matrix"],
+      "correctAnswerIndex": 0,
+      "explanation": "A nilpotent matrix is a square matrix A such that A^k = 0 for some positive integer k."
+    },
+    {
+      "question": "A square matrix A is orthogonal if:",
+      "options": ["A * A^T = I", "A * A^T = A", "A^T = -A", "det(A) = 0"],
+      "correctAnswerIndex": 0,
+      "explanation": "An orthogonal matrix is a real square matrix whose transpose is equal to its inverse: A * A^T = A^T * A = I."
+    },
+    {
+      "question": "If A is a square matrix of order n and k is a scalar, what is the determinant of kA?",
+      "options": ["k^n * det(A)", "k * det(A)", "n^k * det(A)", "k^(n-1) * det(A)"],
+      "correctAnswerIndex": 0,
+      "explanation": "For an n x n matrix A, multiplying every element by k multiplies the determinant by k for each of the n rows: det(kA) = k^n * det(A)."
+    },
+    {
+      "question": "Which of the following is true for the trace of two square matrices A and B of same order?",
+      "options": ["trace(A + B) = trace(A) + trace(B)", "trace(AB) = trace(A) * trace(B)", "trace(A) = trace(A^T) * -1", "trace(AB) != trace(BA)"],
+      "correctAnswerIndex": 0,
+      "explanation": "The trace is a linear operator: trace(A + B) = trace(A) + trace(B)."
+    },
+    {
+      "question": "If A is a skew-symmetric matrix of odd order, its determinant is always:",
+      "options": ["0", "1", "-1", "Infinite"],
+      "correctAnswerIndex": 0,
+      "explanation": "The determinant of an odd-order skew-symmetric matrix is always zero."
+    },
+    {
+      "question": "Which of the following is the conjugate transpose of a matrix A (often denoted as A*)?",
+      "options": ["(A_bar)^T", "(A^T)^T", "A^-1", "adj(A)"],
+      "correctAnswerIndex": 0,
+      "explanation": "The conjugate transpose is obtained by taking the complex conjugate of each element and then taking the transpose."
+    },
+    {
+      "question": "A complex square matrix A is called Hermitian if:",
+      "options": ["A = A*", "A = -A*", "A = A^-1", "det(A) = 0"],
+      "correctAnswerIndex": 0,
+      "explanation": "A Hermitian matrix is equal to its conjugate transpose: A = A*."
+    },
+    {
+      "question": "A complex square matrix A is called skew-Hermitian if:",
+      "options": ["A = -A*", "A = A*", "A = A^-1", "det(A) = 1"],
+      "correctAnswerIndex": 0,
+      "explanation": "A skew-Hermitian matrix is equal to the negative of its conjugate transpose: A = -A*."
+    },
+    {
+      "question": "A complex square matrix A is called unitary if:",
+      "options": ["A * A* = I", "A = A*", "A = -A*", "det(A) = 0"],
+      "correctAnswerIndex": 0,
+      "explanation": "A unitary matrix is a complex square matrix whose conjugate transpose is equal to its inverse: A * A* = I."
+    },
+    {
+      "question": "What are the eigenvalues of a diagonal matrix?",
+      "options": ["Its diagonal elements", "Zero", "1", "Sum of its rows"],
+      "correctAnswerIndex": 0,
+      "explanation": "The eigenvalues of a diagonal or triangular matrix are precisely the elements on its main diagonal."
+    },
+    {
+      "question": "The Cayley-Hamilton Theorem states that every square matrix satisfies its own:",
+      "options": ["Characteristic equation", "Transpose equation", "Adjoint equation", "Inverse equation"],
+      "correctAnswerIndex": 0,
+      "explanation": "The Cayley-Hamilton Theorem states that substituting the matrix A into its characteristic polynomial p(λ) = det(λI - A) yields the zero matrix: p(A) = 0."
+    },
+    {
+      "question": "If the eigenvalues of a matrix A are 2 and 5, what are the eigenvalues of A^2?",
+      "options": ["4 and 25", "2 and 5", "7 and 10", "1/2 and 1/5"],
+      "correctAnswerIndex": 0,
+      "explanation": "If λ is an eigenvalue of A, then λ^k is an eigenvalue of A^k. Thus, the eigenvalues of A^2 are 2^2 = 4 and 5^2 = 25."
     }
   ],
   "math-complex": [
@@ -1361,6 +1451,102 @@
       "options": ["Renewable resources", "Non-renewable resources", "Exhaustible resources", "Fossil fuels"],
       "correctAnswerIndex": 0,
       "explanation": "Renewable resources (such as solar energy, timber, and water) regenerate through natural cycles at rates comparable to their usage."
+    }
+  ],
+  "adjoint-and-inverse": [
+    {
+      "question": "What is the relation between a square matrix A, its adjoint, and its determinant?",
+      "options": ["A * adj(A) = det(A) * I", "A * adj(A) = I", "A * adj(A) = det(A)", "A * adj(A) = adj(A)"],
+      "correctAnswerIndex": 0,
+      "explanation": "For any square matrix A, A * adj(A) = adj(A) * A = det(A) * I."
+    },
+    {
+      "question": "If A is a 3x3 matrix and |A| = 4, what is the value of |adj(A)|?",
+      "options": ["16", "4", "64", "1"],
+      "correctAnswerIndex": 0,
+      "explanation": "|adj(A)| = |A|^(n-1). For n=3 and |A|=4, |adj(A)| = 4^(3-1) = 4^2 = 16."
+    },
+    {
+      "question": "Which of the following describes the inverse of a matrix A?",
+      "options": ["adj(A) / det(A)", "det(A) / adj(A)", "det(A) * adj(A)", "A^T * adj(A)"],
+      "correctAnswerIndex": 0,
+      "explanation": "The inverse of matrix A is defined as A⁻¹ = adj(A) / det(A), provided det(A) is not zero."
+    },
+    {
+      "question": "If matrix A is symmetric, then its adjoint matrix adj(A) is:",
+      "options": ["Symmetric", "Skew-symmetric", "Diagonal", "Identity"],
+      "correctAnswerIndex": 0,
+      "explanation": "The adjoint of a symmetric matrix is also symmetric."
+    },
+    {
+      "question": "Under what condition does the inverse of a square matrix A not exist?",
+      "options": ["det(A) = 0", "det(A) != 0", "A is symmetric", "det(A) = 1"],
+      "correctAnswerIndex": 0,
+      "explanation": "If det(A) = 0, the matrix is singular and does not have an inverse."
+    }
+  ],
+  "rank-of-matrix": [
+    {
+      "question": "What is the rank of a zero matrix?",
+      "options": ["0", "1", "Undefined", "-1"],
+      "correctAnswerIndex": 0,
+      "explanation": "By definition, the rank of a zero matrix of any order is 0."
+    },
+    {
+      "question": "If a matrix has order 3x4, what is the maximum possible rank of this matrix?",
+      "options": ["3", "4", "12", "7"],
+      "correctAnswerIndex": 0,
+      "explanation": "The rank of an m x n matrix is at most min(m, n). Thus, for 3x4, the maximum rank is 3."
+    },
+    {
+      "question": "What is the rank of a 3x3 identity matrix?",
+      "options": ["3", "1", "0", "9"],
+      "correctAnswerIndex": 0,
+      "explanation": "An identity matrix of order 3 has 3 linearly independent rows/columns, so its rank is 3."
+    },
+    {
+      "question": "A matrix is transformed into row echelon form. The rank is equal to:",
+      "options": ["The number of non-zero rows", "The number of zero rows", "The number of columns", "The total number of rows"],
+      "correctAnswerIndex": 0,
+      "explanation": "The rank of a matrix is equal to the number of non-zero rows in its row echelon form."
+    },
+    {
+      "question": "If the rank of a 3x3 matrix is 2, then the determinant of the matrix is:",
+      "options": ["Zero", "Non-zero", "1", "-1"],
+      "correctAnswerIndex": 0,
+      "explanation": "Since the rank is less than the order (3), the rows are linearly dependent, so its determinant must be zero."
+    }
+  ],
+  "cramer-s---gauss-rules": [
+    {
+      "question": "Cramer's rule is applicable only when the system of linear equations has a determinant of coefficients that is:",
+      "options": ["Non-zero", "Zero", "Positive", "Negative"],
+      "correctAnswerIndex": 0,
+      "explanation": "Cramer's rule requires division by the determinant of coefficients, so det(A) must be non-zero."
+    },
+    {
+      "question": "In Cramer's rule, the value of the variable y is calculated as:",
+      "options": ["det(Ay) / det(A)", "det(A) / det(Ay)", "det(Ay) * det(A)", "det(A) - det(Ay)"],
+      "correctAnswerIndex": 0,
+      "explanation": "According to Cramer's rule, y = det(Ay) / det(A), where det(A) != 0."
+    },
+    {
+      "question": "The process of Gaussian elimination reduces the augmented matrix of a system of equations to:",
+      "options": ["Row echelon form", "Diagonal form", "Reduced row echelon form", "Identity matrix"],
+      "correctAnswerIndex": 0,
+      "explanation": "Gaussian elimination transforms the augmented matrix into row echelon form, followed by back-substitution."
+    },
+    {
+      "question": "According to the Rouché-Capelli Theorem, a system AX = B of n variables is consistent with a unique solution if:",
+      "options": ["rank(A) = rank([A|B]) = n", "rank(A) = rank([A|B]) < n", "rank(A) != rank([A|B])", "rank(A) = n"],
+      "correctAnswerIndex": 0,
+      "explanation": "A system has a unique solution if the rank of coefficients equals the rank of the augmented matrix and equals the number of variables n."
+    },
+    {
+      "question": "If rank(A) = rank([A|B]) < n (where n is the number of unknowns), the system of equations has:",
+      "options": ["Infinitely many solutions", "A unique solution", "No solution", "Exactly two solutions"],
+      "correctAnswerIndex": 0,
+      "explanation": "If the rank is equal but less than the number of variables n, the system has infinitely many solutions."
     }
   ]
 }

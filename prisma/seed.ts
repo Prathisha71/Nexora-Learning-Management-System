@@ -3,11 +3,14 @@ import bcrypt from 'bcryptjs';
 import { initialBoards } from './tnsb-data';
 
 const prisma = new PrismaClient();
-const DEFAULT_PASSWORD = 'password123';
 
 async function main() {
   console.log('Starting seed...');
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+  // Admin password is set via ADMIN_SEED_PASSWORD env variable for security.
+  // If not set, a strong random placeholder is used — admin must change it on first login.
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD || 'NexoraAdmin@' + Math.random().toString(36).slice(2, 10);
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
+  console.log(`Admin password set from ADMIN_SEED_PASSWORD env var. Change it after first login.`);
 
   console.log('Cleaning up existing database records...');
   await prisma.subjectStatistics.deleteMany({});
@@ -268,6 +271,35 @@ async function main() {
               }
             });
 
+            if ((topicData as any).videoUrl && ((topicData as any).videoUrl.includes('youtube.com') || (topicData as any).videoUrl.includes('youtu.be'))) {
+              const videoCount = await prisma.courseVideo.count({
+                where: { topicId: dbTopic.id }
+              });
+              if (videoCount === 0) {
+                await prisma.courseVideo.create({
+                  data: {
+                    title: `Video: ${dbTopic.name}`,
+                    videoUrl: (topicData as any).videoUrl,
+                    duration: 900,
+                    topicId: dbTopic.id,
+                    sortOrder: 1,
+                  }
+                });
+              } else {
+                const existingVideo = await prisma.courseVideo.findFirst({
+                  where: { topicId: dbTopic.id }
+                });
+                if (existingVideo) {
+                  await prisma.courseVideo.update({
+                    where: { id: existingVideo.id },
+                    data: {
+                      videoUrl: (topicData as any).videoUrl
+                    }
+                  });
+                }
+              }
+            }
+
             // Map standard topic variables for later courses/materials seeding
             if (boardData.id === 'tnsb') {
               if (classData.id === 'class-12') {
@@ -313,14 +345,18 @@ async function main() {
 
 
 
+
   // ==========================================
-  // 5. SEED USERS & ROLES
+  // 5. SEED ADMIN USER ONLY
   // ==========================================
-  console.log('Seeding Users...');
+  // NOTE: Teachers are added by admin via the Admin Portal.
+  // Students self-register and are approved by admin.
+  // No default student or teacher credentials are seeded for security.
+  console.log('Seeding Admin user...');
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@nexoralearning.com' },
-    update: { passwordHash },
+    update: {},
     create: {
       email: 'admin@nexoralearning.com',
       passwordHash,
@@ -328,6 +364,7 @@ async function main() {
       lastName: 'Sharma',
       role: UserRole.ADMIN,
       phoneNumber: '9876543210',
+      isActive: true,
     },
   });
 
@@ -343,201 +380,14 @@ async function main() {
     create: { userId: adminUser.id, roleId: adminRole.id },
   });
 
-  // Teacher
-  const teacherUser = await prisma.user.upsert({
-    where: { email: 'teacher@nexoralearning.com' },
-    update: { passwordHash },
-    create: {
-      email: 'teacher@nexoralearning.com',
-      passwordHash,
-      firstName: 'Dr. Ramesh',
-      lastName: 'Prasad',
-      role: UserRole.TEACHER,
-      phoneNumber: '9876543211',
-    },
-  });
-
-  const dbTeacher = await prisma.teacher.upsert({
-    where: { id: teacherUser.id },
-    update: {},
-    create: {
-      id: teacherUser.id,
-      bio: 'PhD in Physics from IIT Madras with 15+ years of class 9-12 teaching experience.',
-      qualification: 'PhD in Physics',
-    },
-  });
-
-  await prisma.userRoleJoin.upsert({
-    where: { userId_roleId: { userId: teacherUser.id, roleId: teacherRole.id } },
-    update: {},
-    create: { userId: teacherUser.id, roleId: teacherRole.id },
-  });
-
-  // Student
-  const studentUser = await prisma.user.upsert({
-    where: { email: 'student@nexoralearning.com' },
-    update: { passwordHash },
-    create: {
-      email: 'student@nexoralearning.com',
-      passwordHash,
-      firstName: 'Prathamesh',
-      lastName: 'Sharma',
-      role: UserRole.STUDENT,
-      phoneNumber: '9876543212',
-    },
-  });
-
-  const dbStudent = await prisma.student.upsert({
-    where: { id: studentUser.id },
-    update: {},
-    create: {
-      id: studentUser.id,
-      classId: class12.id,
-      boardId: boardTNSB.id,
-    },
-  });
-
-  await prisma.userRoleJoin.upsert({
-    where: { userId_roleId: { userId: studentUser.id, roleId: studentRole.id } },
-    update: {},
-    create: { userId: studentUser.id, roleId: studentRole.id },
-  });
+  console.log('Admin seeded: admin@nexoralearning.com');
 
   // ==========================================
-  // 6. SEED SUBSCRIPTIONS
+  // 6. SEED COURSES (no teacher reference — assigned by admin portal)
   // ==========================================
-  console.log('Seeding Subscription Plans...');
-  const premiumPlan = await prisma.subscriptionPlan.upsert({
-    where: { name: 'EduVerse Premium Monthly' },
-    update: {},
-    create: {
-      name: 'EduVerse Premium Monthly',
-      description: 'Full access to high-end live classes, premium analytics, personalized feedback, and complete syllabus.',
-      price: 30000.00,
-      durationDays: 30,
-      billingPeriod: BillingPeriod.MONTHLY,
-      isActive: true,
-    },
-  });
-
-  const startDate = new Date();
-  const endDate = new Date();
-  endDate.setDate(startDate.getDate() + 30);
-
-  const studentSub = await prisma.subscription.create({
-    data: {
-      studentId: dbStudent.id,
-      planId: premiumPlan.id,
-      status: SubscriptionStatus.ACTIVE,
-      startDate: startDate,
-      endDate: endDate,
-      nextBillingDate: endDate,
-    },
-  });
-
-  await prisma.payment.create({
-    data: {
-      subscriptionId: studentSub.id,
-      amount: 30000.00,
-      currency: 'INR',
-      status: PaymentStatus.SUCCESS,
-      gateway: PaymentGateway.RAZORPAY,
-      transactionId: 'pay_HjK982Kls9PzL2',
-      paidAt: startDate,
-    },
-  });
+  console.log('Seeding Courses and Quiz Questions...');
 
   // ==========================================
-  // 7. SEED COURSES & CONTENT
-  // ==========================================
-  console.log('Seeding Courses and Materials...');
-
-  // Maths Course
-  const courseMaths = await prisma.course.create({
-    data: {
-      title: 'TNSB Class 12 Mathematics Masterclass',
-      description: 'Comprehensive guide for Class 12 Tamil Nadu State Board Mathematics.',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&q=80&w=300',
-      subjectId: maths.id,
-      classId: class12.id,
-      boardId: boardTNSB.id,
-      teacherId: dbTeacher.id,
-    },
-  });
-
-  // Physics Course
-  const coursePhysics = await prisma.course.create({
-    data: {
-      title: 'TNSB Class 12 Physics Masterclass',
-      description: 'Comprehensive guide for Class 12 Tamil Nadu State Board Physics.',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1507668077129-56e32842fceb?auto=format&fit=crop&w=800&q=80',
-      subjectId: physics.id,
-      classId: class12.id,
-      boardId: boardTNSB.id,
-      teacherId: dbTeacher.id,
-    },
-  });
-
-  // Chemistry Course
-  const courseChemistry = await prisma.course.create({
-    data: {
-      title: 'TNSB Class 12 Chemistry Masterclass',
-      description: 'Comprehensive guide for Class 12 Tamil Nadu State Board Chemistry.',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1532187643603-ba119ca4109e?auto=format&fit=crop&q=80&w=300',
-      subjectId: chemistry.id,
-      classId: class12.id,
-      boardId: boardTNSB.id,
-      teacherId: dbTeacher.id,
-    },
-  });
-
-
-  // Videos
-  await prisma.courseVideo.create({
-    data: {
-      title: 'Intro to Matrices and Determinants',
-      videoUrl: 'https://www.w3schools.com/html/movie.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&q=80&w=300',
-      duration: 930, // 15m 30s
-      topicId: topicMath1.id,
-      sortOrder: 1,
-    },
-  });
-
-  await prisma.courseVideo.create({
-    data: {
-      title: 'Coulomb\'s Law Basics',
-      videoUrl: 'https://www.w3schools.com/html/movie.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1532187643603-ba119ca4109e?auto=format&fit=crop&q=80&w=300',
-      duration: 900,
-      topicId: topicPhys1.id,
-      sortOrder: 1,
-    },
-  });
-
-  await prisma.courseVideo.create({
-    data: {
-      title: 'Alloys and Metal Properties',
-      videoUrl: 'https://www.w3schools.com/html/movie.mp4',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1532187643603-ba119ca4109e?auto=format&fit=crop&q=80&w=300',
-      duration: 1440,
-      topicId: topicChem1.id,
-      sortOrder: 1,
-    },
-  });
-
-  // Notes
-  await prisma.courseNote.create({
-    data: {
-      title: 'Adjoint & Inverse Formulas Sheet',
-      fileUrl: '/adjoint_inverse_rank_notes.pdf',
-      topicId: topicMath1.id,
-      sortOrder: 1,
-      isRequiredForComplete: true,
-    },
-  });
-
-  // Quizzes
   const quizMath = await prisma.quiz.create({
     data: {
       title: 'Matrices Basics Assessment',
@@ -664,92 +514,9 @@ async function main() {
     });
   }
 
-  // Assignments (No default assignments seeded to start with a clean homework space)
 
-  // ==========================================
-  // 8. SEED INITIAL PROGRESS
-  // ==========================================
-  console.log('Seeding initial student progress...');
-
-  // Mathematics progress
-  await prisma.studentSubjectProgress.create({
-    data: { studentId: dbStudent.id, subjectId: maths.id, isCompleted: false, completedPercentage: 0.0, unlocked: true },
-  });
-  await prisma.studentChapterProgress.create({
-    data: { studentId: dbStudent.id, chapterId: chapterMatrices.id, isCompleted: false, completedPercentage: 0.0, unlocked: true },
-  });
-  await prisma.studentTopicProgress.create({
-    data: { studentId: dbStudent.id, topicId: topicMath1.id, unlocked: true, isCompleted: false, watchPercent: 0.0, quizCompleted: false, assignmentCompleted: false, notesViewed: false },
-  });
-  await prisma.studentTopicProgress.create({
-    data: { studentId: dbStudent.id, topicId: topicMath2.id, unlocked: false, isCompleted: false, watchPercent: 0.0, quizCompleted: false, assignmentCompleted: false, notesViewed: false },
-  });
-
-  // Physics progress
-  await prisma.studentSubjectProgress.create({
-    data: { studentId: dbStudent.id, subjectId: physics.id, isCompleted: false, completedPercentage: 0.0, unlocked: true },
-  });
-  await prisma.studentChapterProgress.create({
-    data: { studentId: dbStudent.id, chapterId: chapterElectrostatics.id, isCompleted: false, completedPercentage: 0.0, unlocked: true },
-  });
-  await prisma.studentTopicProgress.create({
-    data: { studentId: dbStudent.id, topicId: topicPhys1.id, unlocked: true, isCompleted: false, watchPercent: 0.0, quizCompleted: false, assignmentCompleted: false, notesViewed: false },
-  });
-  await prisma.studentTopicProgress.create({
-    data: { studentId: dbStudent.id, topicId: topicPhys2.id, unlocked: false, isCompleted: false, watchPercent: 0.0, quizCompleted: false, assignmentCompleted: false, notesViewed: false },
-  });
-
-  // Chemistry progress
-  await prisma.studentSubjectProgress.create({
-    data: { studentId: dbStudent.id, subjectId: chemistry.id, isCompleted: false, completedPercentage: 0.0, unlocked: true },
-  });
-  await prisma.studentChapterProgress.create({
-    data: { studentId: dbStudent.id, chapterId: chapterMetallurgy.id, isCompleted: false, completedPercentage: 0.0, unlocked: true },
-  });
-  await prisma.studentTopicProgress.create({
-    data: { studentId: dbStudent.id, topicId: topicChem1.id, unlocked: true, isCompleted: false, watchPercent: 0.0, quizCompleted: false, assignmentCompleted: false, notesViewed: false },
-  });
-  await prisma.studentTopicProgress.create({
-    data: { studentId: dbStudent.id, topicId: topicChem2.id, unlocked: false, isCompleted: false, watchPercent: 0.0, quizCompleted: false, assignmentCompleted: false, notesViewed: false },
-  });
-
-
-  // ==========================================
-  // 9. SEED ANALYTICS & GAMIFICATION
-  // ==========================================
-  console.log('Seeding student analytics structures...');
-  await prisma.studentAnalytics.create({
-    data: {
-      studentId: dbStudent.id,
-      totalStudyTimeMinutes: 45,
-      averageQuizScore: 90.0,
-      overallCompletionRate: 15.0,
-      xp: 2100,
-    },
-  });
-
-  await prisma.learningStreak.create({
-    data: {
-      studentId: dbStudent.id,
-      currentStreak: 9,
-      longestStreak: 12,
-      lastActivityDate: new Date(),
-    },
-  });
-
-  await prisma.subjectStatistics.create({
-    data: {
-      studentId: dbStudent.id,
-      subjectId: maths.id,
-      topicsCompleted: 0,
-      totalTopics: 2,
-      quizzesTaken: 0,
-      quizzesPassed: 0,
-      averageScore: 0.0,
-    },
-  });
-
-  console.log('Seeding completed successfully!');
+  console.log('Seeding completed successfully. Only admin@nexoralearning.com is seeded.');
+  console.log('Add teachers via Admin Portal. Students self-register and await approval.');
 }
 
 main()

@@ -292,6 +292,28 @@ export const TeacherDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Instructor Details Card */}
+      <div className="glass-card rounded-xl p-5 border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950/20 shadow-md">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Full Name</span>
+            <span className="font-semibold text-slate-900 dark:text-white block truncate">{profile.name}</span>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Academic Email</span>
+            <span className="font-semibold text-slate-900 dark:text-white block truncate">{profile.email}</span>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Contact Phone</span>
+            <span className="font-semibold text-slate-900 dark:text-white block font-mono">{profile.phoneNumber || "Not provided"}</span>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Subject Specialization</span>
+            <span className="font-semibold text-slate-900 dark:text-white block">{teacherSubject}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Tab Selector */}
       <div className="flex border-b border-slate-200 dark:border-white/5 pb-1 gap-6">
         <button

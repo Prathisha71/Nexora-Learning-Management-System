@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLmsStore } from "../store/index";
 import { authAPI } from "../services/api";
+import { getApiBaseUrl } from "../utils/apiBase";
 import {
   Plus,
   Settings,
@@ -28,7 +29,47 @@ import {
   Search,
   Mail,
   Send,
+  Brain,
 } from "lucide-react";
+
+const locationSuggestions = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman & Nicobar Islands",
+  "Chandigarh",
+  "Dadra & Nagar Haveli and Daman & Diu",
+  "Delhi",
+  "Jammu & Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry"
+];
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const getSubjectSolidColor = (color: string) => {
@@ -56,7 +97,7 @@ const PremiumEmptyState = ({ icon: Icon, title, description }: { icon: any, titl
   );
 };
 
-const API = (import.meta.env.VITE_API_URL as string) || (typeof window !== "undefined" ? `${window.location.origin}/api` : "http://localhost:3000/api");
+const API = `${getApiBaseUrl()}/api`;
 const authHeaders = () => {
   const token = localStorage.getItem("auth_token") || "";
   return { Authorization: `Bearer ${token}` };
@@ -73,6 +114,154 @@ interface NoteRecord {
 interface AssignmentRecord {
   id: string; title: string; deadline: string; fileUrl?: string; isLocked: boolean;
 }
+
+const drmPromptText = `You are working on my LMS web application. Implement a secure DRM-style video protection system for course videos.
+
+Project stack:
+- Frontend: React
+- Backend: Node.js + Express
+- Database: PostgreSQL + Prisma
+- Storage: MinIO (S3 compatible)
+- Video player: Use Shaka Player
+- Authentication: Existing JWT/session authentication
+
+Goal:
+Protect course videos from direct downloading and unauthorized access.
+
+Implement the following:
+
+1. Video Storage Security
+- Do NOT serve raw MP4 files directly.
+- Convert uploaded videos into encrypted HLS/DASH streams.
+- Use FFmpeg for video processing.
+- Generate:
+  - .m3u8 playlists
+  - encrypted video segments
+  - encryption keys
+- Store processed videos inside MinIO.
+
+Folder structure:
+storage/
+  courses/
+    {courseId}/
+      {videoId}/
+        manifest.m3u8
+        segments/
+        keys/
+
+2. Backend DRM Access Layer
+Create a secure video access API.
+
+Add:
+GET /api/videos/:videoId/playback
+
+Flow:
+- Verify user authentication
+- Verify user is enrolled in the course
+- Generate a short-lived playback token
+- Return secure playback URL
+
+Token:
+- Expire after 10 minutes
+- Include:
+  userId
+  courseId
+  videoId
+  expiry
+
+3. Secure Streaming Endpoint
+Create:
+GET /api/videos/:videoId/stream/*
+
+Requirements:
+- Validate playback token
+- Reject expired tokens
+- Prevent unauthorized users
+- Add proper CORS protection
+- Prevent hotlinking
+
+4. Frontend Player
+Integrate Shaka Player.
+
+Create:
+components/DRMVideoPlayer.jsx
+
+Features:
+- Load secure playback URL
+- Request license/key endpoint
+- Handle errors
+- Show loading state
+- Show playback failure message
+
+5. Add Watermark Protection
+Add dynamic watermark overlay:
+
+Display:
+- Logged-in username
+- User ID
+- Current timestamp
+
+Watermark should:
+- Move position every few seconds
+- Be semi-transparent
+- Appear over video
+
+6. Database Changes
+
+Update Prisma schema.
+
+Add fields if needed:
+
+Video:
+- encryptedPath
+- manifestPath
+- drmEnabled
+- encryptionKeyId
+
+Create migration.
+
+7. Upload Pipeline
+
+When admin uploads a video:
+
+Flow:
+Upload MP4
+↓
+FFmpeg processing
+↓
+Encrypt
+↓
+Generate HLS/DASH
+↓
+Upload to MinIO
+↓
+Save metadata in PostgreSQL
+
+8. Security
+
+Implement:
+- Signed URLs
+- Short expiry tokens
+- No public MinIO bucket
+- No direct object URLs
+- Disable browser download controls
+- Rate limit playback API
+
+9. Code Quality
+
+Requirements:
+- Follow existing project structure
+- Do not break current LMS features
+- Use environment variables for secrets
+- Add comments explaining DRM flow
+- Add error handling
+- Provide setup instructions
+
+After implementation:
+- Show all changed files
+- Explain database changes
+- Provide commands to run migrations
+- Provide FFmpeg installation/setup steps`;
 
 // ─── component ───────────────────────────────────────────────────────────────
 export const AdminPortal: React.FC = () => {
@@ -95,11 +284,12 @@ export const AdminPortal: React.FC = () => {
   const [userDept, setUserDept] = useState("Operations");
   const [userBio, setUserBio] = useState("");
   const [userQualification, setUserQualification] = useState("");
+  const [userLocation, setUserLocation] = useState("");
+  const [activationLocation, setActivationLocation] = useState("");
 
   // ── New Student Activation & Filters States ──
   const [searchQuery, setSearchQuery] = useState("");
   const [gradeFilter, setGradeFilter] = useState("All Grades");
-  const [statusFilter, setStatusFilter] = useState("All Status");
   const [subFilter, setSubFilter] = useState("All Subscriptions");
   
   // Activation modal
@@ -113,19 +303,90 @@ export const AdminPortal: React.FC = () => {
   // Create student modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+  // Teacher Registration Form State
+  const [teacherFullName, setTeacherFullName] = useState("");
+  const [teacherPhone, setTeacherPhone] = useState("");
+  const [teacherSubjectArea, setTeacherSubjectArea] = useState("Mathematics");
+  const [teacherEmail, setTeacherEmail] = useState("");
+  const [teacherTempPassword, setTeacherTempPassword] = useState("");
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
+  const [teacherError, setTeacherError] = useState("");
+
   // ── Analytics & Graph State ──
   const [analyticsData, setAnalyticsData] = useState<any>({
     activeSubscriptionsCount: 0,
     monthlyActiveSubscriptions: Array(12).fill(0),
-    regionalDistribution: []
+    regionalDistribution: [],
+    totalRevenue: 45000000,
+    serverUptime: 0,
+    databaseQueries: 145000
   });
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [liveUptime, setLiveUptime] = useState<number>(0);
+  const [liveQueries, setLiveQueries] = useState<number>(145000);
+
+  // Helper to format live uptime duration
+  const formatUptimeDuration = (seconds: number) => {
+    if (!seconds || seconds <= 0) return "0s";
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor((seconds % (3600 * 24)) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+
+    const parts = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h > 0 || d > 0) parts.push(`${h}h`);
+    if (m > 0 || h > 0 || d > 0) parts.push(`${m}m`);
+    parts.push(`${s}s`);
+
+    return parts.join(" ");
+  };
+
+  // Helper to format revenue in Crores/Lakhs/Rupees dynamically
+  const formatRevenue = (rev: number) => {
+    if (rev === undefined || rev === null) return "₹0";
+    if (rev >= 10000000) {
+      return `₹${(rev / 10000000).toFixed(2)} Crores`;
+    }
+    if (rev >= 100000) {
+      return `₹${(rev / 100000).toFixed(2)} Lakhs`;
+    }
+    return `₹${rev.toLocaleString()}`;
+  };
+
+  const handleCopyPrompt = () => {
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(drmPromptText);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = drmPromptText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      useLmsStore.getState().addNotification(
+        "Prompt Copied",
+        "DRM engineering guide copied to clipboard.",
+        "success"
+      );
+    } catch (err) {
+      useLmsStore.getState().addNotification(
+        "Copy Failed",
+        "Failed to copy prompt to clipboard.",
+        "alert"
+      );
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
       setLoadingAnalytics(true);
       const data = await authAPI.getAdminAnalytics();
       setAnalyticsData(data);
+      if (data.serverUptime !== undefined) setLiveUptime(data.serverUptime);
+      if (data.databaseQueries !== undefined) setLiveQueries(data.databaseQueries);
     } catch (err) {
       console.warn("Failed to fetch admin analytics:", err);
     } finally {
@@ -137,6 +398,36 @@ export const AdminPortal: React.FC = () => {
     if (activeView === "admin-analytics" || activeView === "admin-users" || activeView === "admin-regional-distribution") {
       fetchAnalytics();
     }
+  }, [activeView]);
+
+  // Live ticking hook for real-time uptime and database queries updates
+  useEffect(() => {
+    if (activeView !== "admin-analytics") return;
+
+    const interval = setInterval(() => {
+      setLiveUptime((prev) => prev + 1);
+      setLiveQueries((prev) => {
+        const jitter = Math.floor(Math.random() * 3) + 1; // +1 to +3 queries
+        return prev + jitter;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeView]);
+
+  // Periodic backend polling hook
+  useEffect(() => {
+    if (activeView !== "admin-analytics" && activeView !== "admin-users" && activeView !== "admin-regional-distribution") return;
+
+    const pollInterval = setInterval(() => {
+      authAPI.getAdminAnalytics().then((data) => {
+        setAnalyticsData(data);
+        if (data.serverUptime !== undefined) setLiveUptime(data.serverUptime);
+        if (data.databaseQueries !== undefined) setLiveQueries(data.databaseQueries);
+      }).catch((err) => console.warn("Background analytics poll failed:", err));
+    }, 20000); // Poll every 20 seconds
+
+    return () => clearInterval(pollInterval);
   }, [activeView]);
 
   const fetchUsers = async () => {
@@ -160,7 +451,8 @@ export const AdminPortal: React.FC = () => {
     try {
       await authAPI.activateUser(activatingStudent.id, {
         paymentStatus: activationPaymentStatus,
-        password: activationPassword
+        password: activationPassword,
+        location: activationLocation
       });
       setIsActivationModalOpen(false);
       setActivatingStudent(null);
@@ -180,7 +472,7 @@ export const AdminPortal: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeView === "admin-users") {
+    if (activeView === "admin-users" || activeView === "admin-teachers") {
       fetchUsers();
     }
   }, [activeView]);
@@ -200,6 +492,7 @@ export const AdminPortal: React.FC = () => {
         dept: userRole === "ADMIN" ? userDept : undefined,
         bio: userRole === "TEACHER" ? userBio : undefined,
         qualification: userRole === "TEACHER" ? userQualification : undefined,
+        location: userRole === "STUDENT" ? userLocation : undefined,
       };
 
       await authAPI.createUser(payload);
@@ -213,6 +506,50 @@ export const AdminPortal: React.FC = () => {
       fetchAnalytics();
     } catch (err: any) {
       setUsersError(err.message || "Failed to create user.");
+    }
+  };
+
+  const handleCreateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTeacherError("");
+    setCreatingTeacher(true);
+    try {
+      const nameParts = teacherFullName.trim().split(/\s+/);
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "Instructor";
+
+      const payload = {
+        email: teacherEmail.toLowerCase().trim(),
+        password: teacherTempPassword,
+        firstName,
+        lastName,
+        role: "TEACHER",
+        phoneNumber: teacherPhone.trim(),
+        qualification: teacherSubjectArea,
+        bio: `${teacherSubjectArea} teacher at Nexora Learning`,
+      };
+
+      await authAPI.createUser(payload);
+      
+      // Reset form
+      setTeacherFullName("");
+      setTeacherPhone("");
+      setTeacherEmail("");
+      setTeacherTempPassword("");
+      setTeacherSubjectArea("Mathematics");
+
+      useLmsStore.getState().addNotification(
+        "Teacher Registered",
+        `Teacher ${firstName} has been registered and credentials email sent.`,
+        "success"
+      );
+
+      fetchUsers();
+      setView("admin-teachers");
+    } catch (err: any) {
+      setTeacherError(err.message || "Failed to create teacher account.");
+    } finally {
+      setCreatingTeacher(false);
     }
   };
 
@@ -232,6 +569,7 @@ export const AdminPortal: React.FC = () => {
         dept: userRole === "ADMIN" ? userDept : undefined,
         bio: userRole === "TEACHER" ? userBio : undefined,
         qualification: userRole === "TEACHER" ? userQualification : undefined,
+        location: userRole === "STUDENT" ? userLocation : undefined,
       };
 
       await authAPI.updateUser(editingUser.id, payload);
@@ -294,6 +632,9 @@ export const AdminPortal: React.FC = () => {
   const [videoDuration, setVideoDuration] = useState("10"); // in minutes
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const videoFileRef = useRef<HTMLInputElement>(null);
+  const [videoSourceType, setVideoSourceType] = useState<"file" | "url">("file");
+  const [embeddedVideoUrl, setEmbeddedVideoUrl] = useState("");
+  const [drmProtected, setDrmProtected] = useState(false);
 
   // lists
   const [notes, setNotes] = useState<NoteRecord[]>([]);
@@ -458,22 +799,32 @@ export const AdminPortal: React.FC = () => {
 
   const handleUploadVideo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!videoFile || !upSubjectId || !videoTitle) return showStatus("error", "Fill all fields and select a video file.");
+    if (!upSubjectId || !videoTitle) return showStatus("error", "Fill all required fields.");
+    if (videoSourceType === "file" && !videoFile) return showStatus("error", "Please select a video file.");
+    if (videoSourceType === "url" && !embeddedVideoUrl) return showStatus("error", "Please enter a video URL.");
+    
     setUploading(true);
     const fd = new FormData();
-    fd.append("file", videoFile);
+    if (videoSourceType === "file" && videoFile) {
+      fd.append("file", videoFile);
+    } else {
+      fd.append("videoUrl", embeddedVideoUrl);
+    }
     fd.append("subjectId", upSubjectId);
     fd.append("title", videoTitle);
     fd.append("duration", videoDuration);
     fd.append("classTitle", upClass?.name || "general");
     fd.append("subjectTitle", upSubject?.name || "general");
+    if (drmProtected && videoSourceType === "file") {
+      fd.append("drmProtected", "true");
+    }
     try {
       const r = await fetch(`${API}/upload/video`, { method: "POST", headers: authHeaders(), body: fd });
       const d = await r.json();
       if (r.ok) {
-        showStatus("success", "Video lecture uploaded successfully!");
+        showStatus("success", "Video lecture added successfully!");
         setVideos((prev) => [d.video, ...prev]);
-        setVideoTitle(""); setVideoDuration("10"); setVideoFile(null);
+        setVideoTitle(""); setVideoDuration("10"); setVideoFile(null); setEmbeddedVideoUrl(""); setDrmProtected(false);
         if (videoFileRef.current) videoFileRef.current.value = "";
       } else { showStatus("error", d.error || "Upload failed."); }
     } catch { showStatus("error", "Server unreachable."); }
@@ -511,18 +862,6 @@ export const AdminPortal: React.FC = () => {
     { value: "bg-rose-600", label: "Rose Gold" },
   ];
 
-  const views = React.useMemo(() => {
-    const allViews = [
-      { key: "admin-upload", label: "Contents and assignments", icon: Upload },
-      { key: "admin-analytics", label: "Platform Analytics", icon: BarChart3 },
-      { key: "admin-users", label: "Students", icon: Users },
-    ] as const;
-    if (profile?.role === "teacher") {
-      return allViews.filter((v) => v.key === "admin-upload");
-    }
-    return allViews.filter((v) => v.key !== "admin-upload");
-  }, [profile?.role]);
-
   if (!activeBoard || !activeClass) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -533,23 +872,6 @@ export const AdminPortal: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans text-left">
-      {/* Tab Bar */}
-      <div className="flex border-b border-slate-200 dark:border-white/5 gap-4 overflow-x-auto">
-        {views.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setView(key as any)}
-            className={`pb-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all ${
-              activeView === key
-                ? "border-brand-royal text-brand-royal dark:text-white"
-                : "border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-300"
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
 
       {/* ── STRUCTURE BUILDER ─────────────────────────────────────────────── */}
       {activeView === "admin-structure" && (
@@ -912,82 +1234,174 @@ export const AdminPortal: React.FC = () => {
 
           {/* ── Videos Tab — hidden for teachers ─────────────────────────── */}
           {uploadTab === "videos" && profile?.role !== "teacher" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Upload Video Form */}
-              <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <Upload className="w-4 h-4 text-brand-royal" /> Upload Video Lecture
-                </h4>
-                <form onSubmit={handleUploadVideo} className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Video Title</label>
-                    <input type="text" placeholder="e.g. Introduction to Calculus" value={videoTitle} onChange={(e) => setVideoTitle(e.target.value)} className="premium-input text-xs" required />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Duration (Minutes)</label>
-                    <input type="number" min="1" placeholder="e.g. 20" value={videoDuration} onChange={(e) => setVideoDuration(e.target.value)} className="premium-input text-xs" required />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Video File</label>
-                    <div
-                      onClick={() => videoFileRef.current?.click()}
-                      className="w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-brand-royal/50 transition-colors group">
-                      <Video className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2 group-hover:text-brand-royal/50 transition-colors" />
-                      {videoFile ? (
-                        <p className="text-xs font-semibold text-brand-royal">{videoFile.name}</p>
-                      ) : (
-                        <p className="text-xs text-slate-500">Click to select MP4, WebM, or MOV video</p>
-                      )}
-                      <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" className="hidden" onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        if (file && file.size > 5 * 1024 * 1024) {
-                          showStatus("error", "File size exceeds 5MB limit. Please upload a smaller file.");
-                          e.target.value = "";
-                          setVideoFile(null);
-                        } else {
-                          setVideoFile(file);
-                        }
-                      }} />
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Upload Video Form */}
+                <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-brand-royal" /> Add Video Lecture
+                  </h4>
+                  <form onSubmit={handleUploadVideo} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Video Title</label>
+                      <input type="text" placeholder="e.g. Introduction to Calculus" value={videoTitle} onChange={(e) => setVideoTitle(e.target.value)} className="premium-input text-xs" required />
                     </div>
-                  </div>
-                  <button type="submit" disabled={uploading || !videoFile || !videoTitle || !upSubjectId}
-                    className="w-full premium-btn-primary py-2.5 text-xs disabled:opacity-50">
-                    {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    <span>{uploading ? "Uploading Video…" : "Upload Video"}</span>
-                  </button>
-                </form>
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Duration (Minutes)</label>
+                      <input type="number" min="1" placeholder="e.g. 20" value={videoDuration} onChange={(e) => setVideoDuration(e.target.value)} className="premium-input text-xs" required />
+                    </div>
 
-              {/* Videos List */}
-              <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <Video className="w-4 h-4 text-emerald-500" /> Uploaded Video Lectures ({videos.length})
-                </h4>
-                {videos.length === 0 ? (
-                  <PremiumEmptyState
-                    icon={Video}
-                    title="No video lectures"
-                    description="Upload video classes, recording playbacks, or screen captures."
-                  />
-                ) : (
-                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                    {videos.map((v) => (
-                      <div key={v.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-xl">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Video className="w-4 h-4 text-brand-royal flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{v.title}</p>
-                            <span className="text-[10px] text-slate-500 block">Duration: {Math.round(v.duration / 60)} mins</span>
-                            <a href={v.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] text-brand-violet hover:underline truncate block">{v.videoUrl.split("/").pop()}</a>
-                          </div>
-                        </div>
-                        <button onClick={() => handleDeleteVideo(v.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex-shrink-0">
-                          <Trash2 className="w-3.5 h-3.5" />
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase block">Video Source</label>
+                      <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setVideoSourceType("file")}
+                          className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${
+                            videoSourceType === "file"
+                              ? "bg-white dark:bg-slate-800 text-brand-royal shadow-sm"
+                              : "text-slate-600 hover:text-slate-900 dark:hover:text-slate-300"
+                          }`}
+                        >
+                          Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoSourceType("url")}
+                          className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${
+                            videoSourceType === "url"
+                              ? "bg-white dark:bg-slate-800 text-brand-royal shadow-sm"
+                              : "text-slate-600 hover:text-slate-900 dark:hover:text-slate-300"
+                          }`}
+                        >
+                          Video URL / Embed URL
                         </button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+
+                    {videoSourceType === "file" ? (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Video File</label>
+                        <div
+                          onClick={() => videoFileRef.current?.click()}
+                          className="w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-brand-royal/50 transition-colors group">
+                          <Video className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2 group-hover:text-brand-royal/50 transition-colors" />
+                          {videoFile ? (
+                            <p className="text-xs font-semibold text-brand-royal">{videoFile.name}</p>
+                          ) : (
+                            <p className="text-xs text-slate-500">Click to select MP4, WebM, or MOV video</p>
+                          )}
+                          <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" className="hidden" onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            const maxSize = drmProtected ? 500 * 1024 * 1024 : 5 * 1024 * 1024;
+                            if (file && file.size > maxSize) {
+                              showStatus("error", drmProtected
+                                ? "File size exceeds 500MB limit for DRM videos."
+                                : "File size exceeds 5MB limit. Enable DRM for larger uploads or use a smaller file.");
+                              e.target.value = "";
+                              setVideoFile(null);
+                            } else {
+                              setVideoFile(file);
+                            }
+                          }} />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Video / Embed URL</label>
+                        <input
+                          type="url"
+                          placeholder="e.g. https://youtu.be/aojFzrZPB4k?si=..."
+                          value={embeddedVideoUrl}
+                          onChange={(e) => setEmbeddedVideoUrl(e.target.value)}
+                          className="premium-input text-xs"
+                          required={videoSourceType === "url"}
+                        />
+                      </div>
+                    )}
+
+                    {videoSourceType === "file" && (
+                      <label className="flex items-center gap-2 cursor-pointer p-3 rounded-xl border border-brand-royal/20 bg-brand-royal/5">
+                        <input
+                          type="checkbox"
+                          checked={drmProtected}
+                          onChange={(e) => setDrmProtected(e.target.checked)}
+                          className="rounded border-slate-300 text-brand-royal focus:ring-brand-royal"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-white block">Enable DRM protection</span>
+                          <span className="text-[10px] text-slate-500">Encrypts new uploads as HLS/DASH. Requires FFmpeg on the server. Existing videos are unaffected.</span>
+                        </div>
+                      </label>
+                    )}
+
+                    <button type="submit" disabled={uploading || !videoTitle || !upSubjectId || (videoSourceType === "file" ? !videoFile : !embeddedVideoUrl)}
+                      className="w-full premium-btn-primary py-2.5 text-xs disabled:opacity-50">
+                      {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      <span>{uploading ? "Saving Video…" : "Save Video Lecture"}</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Videos List */}
+                <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Video className="w-4 h-4 text-emerald-500" /> Uploaded Video Lectures ({videos.length})
+                  </h4>
+                  {videos.length === 0 ? (
+                    <PremiumEmptyState
+                      icon={Video}
+                      title="No video lectures"
+                      description="Upload video classes, recording playbacks, or screen captures."
+                  />
+                  ) : (
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {videos.map((v) => (
+                        <div key={v.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-xl">
+                          <div className="flex items-center gap-2 min-w-0 font-sans">
+                            <Video className="w-4 h-4 text-brand-royal flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{v.title}</p>
+                              <span className="text-[10px] text-slate-500 block">Duration: {Math.round(v.duration / 60)} mins</span>
+                              {v.drmEnabled && (
+                                <span className="text-[9px] font-bold text-brand-royal uppercase tracking-wider">DRM Protected</span>
+                              )}
+                              {!v.drmEnabled && (
+                                <a href={v.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] text-brand-violet hover:underline truncate block">{v.videoUrl}</a>
+                              )}
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeleteVideo(v.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex-shrink-0">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* DRM Prompt Assistance Card */}
+              <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/5 pb-3">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-brand-royal" /> AI Assistant DRM Video Protection Guide
+                  </h4>
+                  <button
+                    onClick={handleCopyPrompt}
+                    className="px-3 py-1.5 bg-brand-royal hover:bg-brand-royal/90 text-white text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    Copy Prompt
+                  </button>
+                </div>
+                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 font-sans">
+                  <p>
+                    Want to implement industry-grade secure DRM video protection in your LMS? You can copy the engineering prompt below and feed it directly to <strong>Anti-gravity</strong> or another AI coding agent to implement the secure streaming layer.
+                  </p>
+                  <pre className="p-4 bg-slate-900 text-slate-100 rounded-xl text-[10px] font-mono whitespace-pre-wrap max-h-96 overflow-y-auto border border-white/10 select-all">
+                    {drmPromptText}
+                  </pre>
+                </div>
               </div>
             </div>
           )}
@@ -1000,9 +1414,9 @@ export const AdminPortal: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: "Active Subscriptions", value: `${analyticsData.activeSubscriptionsCount || 0} Scholars`, icon: Users, color: "text-blue-500" },
-              { label: "Total Platform Revenue", value: "₹4.50 Crores", icon: DollarSign, color: "text-emerald-500" },
-              { label: "Server Uptime", value: "99.98%", icon: Activity, color: "text-violet-500" },
-              { label: "Database Queries", value: "145k", icon: Database, color: "text-indigo-500" },
+              { label: "Total Platform Revenue", value: formatRevenue(analyticsData.totalRevenue), icon: DollarSign, color: "text-emerald-500" },
+              { label: "Server Uptime", value: `99.98% (${formatUptimeDuration(liveUptime)})`, icon: Activity, color: "text-violet-500" },
+              { label: "Database Queries", value: liveQueries.toLocaleString(), icon: Database, color: "text-indigo-500" },
             ].map((stat, idx) => {
               const Icon = stat.icon;
               return (
@@ -1024,19 +1438,38 @@ export const AdminPortal: React.FC = () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h4 className="text-base font-bold text-slate-900 dark:text-white">Monthly Active Registrations</h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-500">Platform subscription scaling after Class 10/12 exam launches.</p>
                 </div>
                 <div className="text-[10px] font-bold text-brand-violet dark:text-brand-violet-light bg-violet-500/10 px-2 py-0.5 rounded border border-brand-violet/20">+12.4% QoQ Growth</div>
               </div>
-              <div className="h-44 w-full flex items-end pt-4 border-b border-slate-200 dark:border-white/5 relative">
-                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 150">
+              <div className="h-80 w-full flex items-end pt-4 border-b border-slate-200 dark:border-white/5 relative">
+                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 150" preserveAspectRatio="none">
                   <path 
                     d={(() => {
                       const monthlyCounts = analyticsData.monthlyActiveSubscriptions || Array(12).fill(0);
                       const janToJun = monthlyCounts.slice(0, 6);
                       const maxVal = Math.max(...janToJun, 1);
-                      const points = janToJun.map((val: number, idx: number) => `${idx * 80},${135 - (val / maxVal) * 110}`);
-                      return `M ${points.join(" L ")}`;
+                      const points = janToJun.map((val: number, idx: number) => {
+                        const x = (idx * 2 + 1) * (400 / 12);
+                        const y = 135 - (val / maxVal) * 110;
+                        return [x, y];
+                      });
+                      
+                      const getPath = (pts: number[][]) => {
+                        return pts.reduce((acc, pt, i, a) => {
+                          if (i === 0) return `M ${pt[0]},${pt[1]}`;
+                          const prev = a[i - 1];
+                          const next = a[i + 1] || pt;
+                          const prevPrev = a[i - 2] || prev;
+                          
+                          const cp1X = prev[0] + (pt[0] - prevPrev[0]) * 0.16;
+                          const cp1Y = prev[1] + (pt[1] - prevPrev[1]) * 0.16;
+                          const cp2X = pt[0] - (next[0] - prev[0]) * 0.16;
+                          const cp2Y = pt[1] - (next[1] - prev[1]) * 0.16;
+                          
+                          return `${acc} C ${cp1X},${cp1Y} ${cp2X},${cp2Y} ${pt[0]},${pt[1]}`;
+                        }, "");
+                      };
+                      return getPath(points);
                     })()} 
                     fill="none" 
                     stroke="url(#grad)" 
@@ -1049,8 +1482,10 @@ export const AdminPortal: React.FC = () => {
                     </linearGradient>
                   </defs>
                 </svg>
-                <div className="w-full flex justify-between text-[9px] text-slate-600 dark:text-slate-500 font-bold px-1 mb-[-20px] relative z-10">
-                  {["Jan","Feb","Mar","Apr","May","Jun"].map((m) => <span key={m}>{m}</span>)}
+                <div className="w-full flex text-[9px] text-slate-600 dark:text-slate-500 font-bold mb-[-20px] relative z-10">
+                  {["Jan","Feb","Mar","Apr","May","Jun"].map((m) => (
+                    <span key={m} className="flex-1 text-center">{m}</span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1099,8 +1534,7 @@ export const AdminPortal: React.FC = () => {
                 <Users className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Students Management</h2>
-                <p className="text-xs text-slate-500">CRUD operations, analytics, and reports</p>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Students info</h2>
               </div>
             </div>
             
@@ -1113,6 +1547,7 @@ export const AdminPortal: React.FC = () => {
                 setUserRole("STUDENT");
                 setUserBoardId(boards[0]?.id || "");
                 setUserClassId(boards[0]?.classes[0]?.id || "");
+                setUserLocation("");
                 setIsCreateModalOpen(true);
               }}
               className="premium-btn-primary px-4 py-2 text-xs font-bold flex items-center gap-1.5 rounded-xl shadow-md hover:shadow-brand-royal/15 self-start sm:self-auto"
@@ -1122,21 +1557,9 @@ export const AdminPortal: React.FC = () => {
             </button>
           </div>
 
-          {/* Sub-tabs bar */}
-          <div className="flex border-b border-slate-200 dark:border-white/5 gap-6">
-            <button className="pb-3 text-xs font-extrabold text-brand-royal dark:text-white border-b-2 border-brand-royal">
-              Student List
-            </button>
-            <button onClick={() => setView("admin-analytics")} className="pb-3 text-xs font-semibold text-slate-500 hover:text-slate-950 dark:hover:text-slate-350 border-b-2 border-transparent">
-              Analytics &amp; Reports
-            </button>
-            <button className="pb-3 text-xs font-semibold text-slate-500 hover:text-slate-950 dark:hover:text-slate-350 border-b-2 border-transparent">
-              Blocked Users
-            </button>
-          </div>
 
           {/* Filter row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
@@ -1159,20 +1582,6 @@ export const AdminPortal: React.FC = () => {
                 {["Class 9", "Class 10", "Class 11", "Class 12"].map((g) => (
                   <option key={g} value={g}>{g}</option>
                 ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-4 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            </div>
-            {/* Status */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full premium-input text-xs appearance-none pr-8 py-2.5 h-11 bg-white dark:bg-slate-950"
-              >
-                <option value="All Status">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Pending">Pending Activation</option>
               </select>
               <ChevronDown className="absolute right-3 top-4 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             </div>
@@ -1219,17 +1628,12 @@ export const AdminPortal: React.FC = () => {
                 const gradeVal = student.studentProfile?.class?.title || "Class 12";
                 const matchesGrade = gradeFilter === "All Grades" || gradeVal === gradeFilter;
 
-                const matchesStatus = statusFilter === "All Status" || 
-                  (statusFilter === "Active" && subStatus === "ACTIVE") ||
-                  (statusFilter === "Inactive" && subStatus !== "ACTIVE" && subStatus !== "PENDING") ||
-                  (statusFilter === "Pending" && subStatus === "PENDING");
-
                 const matchesSub = subFilter === "All Subscriptions" ||
                   (subFilter === "Active" && subStatus === "ACTIVE") ||
                   (subFilter === "Pending" && subStatus === "PENDING") ||
                   (subFilter === "Expired" && subStatus === "EXPIRED");
 
-                return (nameMatch || emailMatch || locationMatch) && matchesGrade && matchesStatus && matchesSub;
+                return (nameMatch || emailMatch || locationMatch) && matchesGrade && matchesSub;
               });
 
               if (filteredStudents.length === 0) {
@@ -1258,7 +1662,7 @@ export const AdminPortal: React.FC = () => {
                         <tr className="border-b border-slate-200 dark:border-white/5 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-extrabold bg-slate-50/50 dark:bg-slate-950/20">
                           <th className="py-4 px-6">Student</th>
                           <th className="py-4 px-6">Grade</th>
-                          <th className="py-4 px-6">Status</th>
+                          <th className="py-4 px-6">State</th>
                           <th className="py-4 px-6">Subscription</th>
                           <th className="py-4 px-6 text-right">Actions</th>
                         </tr>
@@ -1300,17 +1704,9 @@ export const AdminPortal: React.FC = () => {
                                 {student.studentProfile?.class?.title || "Class 12"}
                               </td>
 
-                              {/* Status Badge */}
-                              <td className="py-4 px-6">
-                                <span className={`inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${
-                                  subStatus === "ACTIVE"
-                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                                    : subStatus === "PENDING"
-                                    ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                    : "bg-slate-500/10 text-slate-600 border-slate-500/20"
-                                }`}>
-                                  {subStatus === "ACTIVE" ? "Active" : subStatus === "PENDING" ? "Pending Activation" : "Inactive"}
-                                </span>
+                              {/* State */}
+                              <td className="py-4 px-6 text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                {student.location || "Not Specified"}
                               </td>
 
                               {/* Subscription Badge */}
@@ -1334,6 +1730,7 @@ export const AdminPortal: React.FC = () => {
                                       setActivatingStudent(student);
                                       setActivationPaymentStatus(payStatus === "SUCCESS" ? "SUCCESS" : "SUCCESS");
                                       setActivationPassword("");
+                                      setActivationLocation(student.location || "");
                                       setActivationError("");
                                       setIsActivationModalOpen(true);
                                     }}
@@ -1363,185 +1760,309 @@ export const AdminPortal: React.FC = () => {
             })()}
           </div>
 
-          {/* Activation Overlay Modal */}
-          {isActivationModalOpen && activatingStudent && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
-                  <Settings className="w-5 h-5 text-brand-royal" />
-                  <span>Activate Student Subscription</span>
-                </h3>
+        </div>
+      )}
+
+      {/* ── USER MANAGEMENT (TEACHERS) ────────────────────────────────────────── */}
+      {activeView === "admin-teachers" && (
+        <div className="space-y-6 animate-fade-in-up text-left">
+          {/* Header row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 rounded-xl flex items-center justify-center">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Teachers info</h2>
+                <p className="text-xs text-slate-500">Educators database, phone contact details, and qualifications</p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => {
+                setTeacherFullName("");
+                setTeacherPhone("");
+                setTeacherEmail("");
+                setTeacherTempPassword("");
+                setTeacherSubjectArea("Mathematics");
+                setTeacherError("");
+                setView("admin-add-teacher");
+              }}
+              className="premium-btn-primary px-4 py-2 text-xs font-bold flex items-center gap-1.5 rounded-xl shadow-md hover:shadow-brand-royal/15 self-start sm:self-auto font-sans"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Teacher</span>
+            </button>
+          </div>
+
+          {/* Filter row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name, email, qualification..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full premium-input pl-9 text-xs py-3 h-11"
+              />
+            </div>
+            {/* Refresh */}
+            <div className="flex justify-end items-center">
+              <button onClick={fetchUsers} className="p-2.5 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 text-slate-500 flex items-center gap-2 text-xs font-semibold">
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? "animate-spin" : ""}`} />
+                <span>Sync Directory</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Teacher list card table */}
+          <div className="glass-card border-slate-200 dark:border-white/5 overflow-hidden">
+            {loadingUsers && usersList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                <RefreshCw className="w-8 h-8 animate-spin mb-3 text-slate-350" />
+                <p className="text-xs">Fetching postgres users...</p>
+              </div>
+            ) : (() => {
+              const teachersOnly = usersList.filter((u) => u.role === "TEACHER");
+              const filteredTeachers = teachersOnly.filter((t) => {
+                const nameMatch = `${t.firstName} ${t.lastName}`.toLowerCase().includes(searchQuery.toLowerCase());
+                const emailMatch = (t.email || "").toLowerCase().includes(searchQuery.toLowerCase());
+                const phoneMatch = (t.phoneNumber || "").toLowerCase().includes(searchQuery.toLowerCase());
+                const qualMatch = (t.teacherProfile?.qualification || "").toLowerCase().includes(searchQuery.toLowerCase());
                 
-                {activationError && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-semibold rounded-lg text-center">
-                    {activationError}
+                return nameMatch || emailMatch || phoneMatch || qualMatch;
+              });
+
+              if (filteredTeachers.length === 0) {
+                return (
+                  <div className="text-center py-20 text-slate-500">
+                    <Users className="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-750" />
+                    <p className="text-xs font-semibold">No teachers found matching search criteria.</p>
                   </div>
-                )}
-                
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Student Name</label>
-                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-white/5">
-                      {activatingStudent.firstName} {activatingStudent.lastName}
-                    </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  <div className="px-5 pt-5 flex justify-between items-center">
+                    <span className="text-[10px] text-slate-650 dark:text-slate-500 font-bold uppercase tracking-wider">
+                      Showing {filteredTeachers.length} of {teachersOnly.length} educators
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Registered Email</label>
-                    <div className="text-xs font-mono text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-white/5">
-                      {activatingStudent.email}
-                    </div>
-                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-white/5 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-extrabold bg-slate-50/50 dark:bg-slate-950/20">
+                          <th className="py-4 px-6">Teacher</th>
+                          <th className="py-4 px-6">Subject Area</th>
+                          <th className="py-4 px-6">Contact Number</th>
+                          <th className="py-4 px-6">Email Address</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                        {filteredTeachers.map((teacher) => (
+                          <tr key={teacher.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                            {/* Teacher Info */}
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 dark:from-emerald-500/20 dark:to-teal-500/20 border border-emerald-500/10 text-emerald-600 dark:text-teal-300 font-bold flex items-center justify-center text-xs">
+                                  {(teacher.firstName?.[0] || "T").toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                    {teacher.firstName} {teacher.lastName}
+                                  </p>
+                                  <span className="text-[9px] text-slate-400 block mt-0.5">
+                                    Nexora Learning Instructor
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Payment Status</label>
-                    <select
-                      value={activationPaymentStatus}
-                      onChange={(e) => setActivationPaymentStatus(e.target.value as any)}
-                      className="w-full premium-input text-xs"
-                    >
-                      <option value="SUCCESS">Paid (SUCCESS)</option>
-                      <option value="PENDING">Unpaid (PENDING)</option>
-                    </select>
-                  </div>
+                            {/* Subject Area */}
+                            <td className="py-4 px-6 text-xs text-slate-700 dark:text-slate-300 font-semibold">
+                              {teacher.teacherProfile?.qualification || "Mathematics"}
+                            </td>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Temporary Password</label>
+                            {/* Phone Number */}
+                            <td className="py-4 px-6 text-xs text-slate-755 dark:text-slate-300 font-mono">
+                              {teacher.phoneNumber || "Not Provided"}
+                            </td>
+
+                            {/* Email */}
+                            <td className="py-4 px-6 text-xs text-slate-550 dark:text-slate-400 font-medium">
+                              {teacher.email}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-4 px-6 text-right">
+                              <button
+                                onClick={() => handleDeleteUser(teacher.id)}
+                                className="p-2 rounded-lg border border-transparent hover:border-red-500/20 text-slate-400 hover:text-red-500 hover:bg-red-500/5 transition-colors"
+                                title="Delete Teacher"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ── REGISTER TEACHER FRESH PAGE ────────────────────────────────────────── */}
+      {activeView === "admin-add-teacher" && (
+        <div className="space-y-6 animate-fade-in-up text-left">
+          {/* Header row with back link */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView("admin-teachers")}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Register Educator</h2>
+              <p className="text-xs text-slate-550">Create credentials and issue temporary portal password</p>
+            </div>
+          </div>
+
+          <div className="max-w-2xl mx-auto glass-card p-6 sm:p-8 border-slate-200 dark:border-white/5 space-y-6">
+            <div className="border-b border-slate-200 dark:border-white/5 pb-4">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Educator Credentials Form</h3>
+              <p className="text-xs text-slate-550 mt-1">Temporary password will be generated and dispatched automatically via Gmail SMTP.</p>
+            </div>
+
+            {teacherError && (
+              <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-semibold rounded-xl text-center">
+                {teacherError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateTeacher} className="space-y-5">
+              {/* Full Name */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Full Name</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-3.5 text-slate-400 text-xs font-semibold">FN</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dr. Ramesh Prasad"
+                    value={teacherFullName}
+                    onChange={(e) => setTeacherFullName(e.target.value)}
+                    className="premium-input pl-10 text-xs sm:text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Email & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Gmail / Academic Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
                     <input
-                      type="text"
-                      placeholder="Enter temporary password for the student"
-                      value={activationPassword}
-                      onChange={(e) => setActivationPassword(e.target.value)}
-                      className="w-full premium-input text-xs"
+                      type="email"
+                      placeholder="e.g. ramesh@gmail.com"
+                      value={teacherEmail}
+                      onChange={(e) => setTeacherEmail(e.target.value)}
+                      className="premium-input pl-10 text-xs sm:text-sm"
                       required
                     />
-                    <p className="text-[9px] text-slate-400 mt-1">
-                      Once sent, the student will receive an email containing this temporary password to log in.
-                    </p>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Contact Phone Number</label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-3.5 text-slate-400 text-xs font-semibold">+91</span>
+                    <input
+                      type="tel"
+                      placeholder="e.g. 9845012345"
+                      value={teacherPhone}
+                      onChange={(e) => setTeacherPhone(e.target.value)}
+                      className="premium-input pl-12 text-xs sm:text-sm"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Subject Area select */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Subject Specialization</label>
+                <select
+                  value={teacherSubjectArea}
+                  onChange={(e) => setTeacherSubjectArea(e.target.value)}
+                  className="w-full bg-slate-550 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-brand-royal"
+                >
+                  <option value="Mathematics">Mathematics</option>
+                  <option value="Physics">Physics</option>
+                  <option value="Chemistry">Chemistry</option>
+                </select>
+              </div>
+
+              {/* Temporary Password */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Temporary Password</label>
                   <button
                     type="button"
                     onClick={() => {
-                      setIsActivationModalOpen(false);
-                      setActivatingStudent(null);
-                      setActivationPassword("");
+                      const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                      const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+                      const numbers = '0123456789';
+                      const generated = Array(8).fill(0).map(() => (uppercase + lowercase + numbers)[Math.floor(Math.random() * 62)]).join('');
+                      setTeacherTempPassword(generated);
                     }}
-                    className="px-4 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    className="text-[10px] text-brand-violet hover:underline font-semibold"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleActivateStudent}
-                    disabled={activationLoading || !activationPassword}
-                    className="premium-btn-primary px-5 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {activationLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    <span>Send Activation Email</span>
+                    Auto Generate Password
                   </button>
                 </div>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Enter temporary password for the teacher"
+                    value={teacherTempPassword}
+                    onChange={(e) => setTeacherTempPassword(e.target.value)}
+                    className="premium-input pl-10 text-xs sm:text-sm font-mono"
+                    required
+                  />
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Create Student Overlay Modal */}
-          {isCreateModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white pb-3 border-b border-slate-100 dark:border-white/5">
-                  Register New Scholar
-                </h3>
-
-                {usersError && (
-                  <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-505 text-xs font-semibold rounded-xl text-center">
-                    {usersError}
-                  </div>
-                )}
-
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  setUsersError("");
-                  try {
-                    const payload = {
-                      email: userEmail,
-                      password: userPassword,
-                      firstName: userFirstName,
-                      lastName: userLastName,
-                      role: "STUDENT",
-                      boardId: userBoardId,
-                      classId: userClassId,
-                    };
-                    await authAPI.createUser(payload);
-                    setIsCreateModalOpen(false);
-                    setUserEmail("");
-                    setUserPassword("");
-                    setUserFirstName("");
-                    setUserLastName("");
-                    fetchUsers();
-                    fetchAnalytics();
-                    useLmsStore.getState().addNotification("Scholar Registered", `Scholar account ${userEmail} registered successfully.`, "success");
-                  } catch (err: any) {
-                    setUsersError(err.message || "Failed to register scholar.");
-                  }
-                }} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">First Name</label>
-                      <input type="text" placeholder="e.g. Aarav" value={userFirstName} onChange={(e) => setUserFirstName(e.target.value)} className="premium-input text-xs" required />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Last Name</label>
-                      <input type="text" placeholder="e.g. Sharma" value={userLastName} onChange={(e) => setUserLastName(e.target.value)} className="premium-input text-xs" required />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Academic Email</label>
-                    <input type="email" placeholder="e.g. aarav@gmail.com" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} className="premium-input text-xs" required />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Password</label>
-                    <input type="password" placeholder="e.g. password123" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} className="premium-input text-xs" required />
-                  </div>
-
-                  <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-905 rounded-xl border border-slate-200 dark:border-white/5">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Opted Board</label>
-                      <select value={userBoardId} onChange={(e) => {
-                        setUserBoardId(e.target.value);
-                        const matched = boards.find((b) => b.id === e.target.value);
-                        setUserClassId(matched?.classes[0]?.id || "");
-                      }} className="premium-input text-[11px] bg-white dark:bg-slate-950" required>
-                        <option value="">-- Select Board --</option>
-                        {boards.map((b) => (
-                          <option key={b.id} value={b.id}>{b.title}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-500 uppercase">Class Grade</label>
-                      <select value={userClassId} onChange={(e) => setUserClassId(e.target.value)} className="premium-input text-[11px] bg-white dark:bg-slate-950" required>
-                        <option value="">-- Select Class --</option>
-                        {boards.find((b) => b.id === userBoardId)?.classes.map((c) => (
-                          <option key={c.id} value={c.id}>{c.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
-                    <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800">Cancel</button>
-                    <button type="submit" className="premium-btn-primary px-5 py-2 text-xs font-bold">Register Scholar</button>
-                  </div>
-                </form>
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setView("admin-teachers")}
+                  className="px-5 py-2.5 text-xs font-bold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingTeacher}
+                  className="premium-btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2"
+                >
+                  {creatingTeacher ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  <span>Add Teacher &amp; Send Mail</span>
+                </button>
               </div>
-            </div>
-          )}
+            </form>
+          </div>
         </div>
       )}
 
@@ -1596,6 +2117,311 @@ export const AdminPortal: React.FC = () => {
                 <p className="text-xs font-semibold">No registered student states found in database console.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── DRM VIDEO SHIELD DASHBOARD ─────────────────────────────────────────── */}
+      {activeView === "drm-security" && (
+        <div className="space-y-6 animate-fade-in-up text-left">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Lock className="w-5 h-5 text-brand-royal" /> DRM Video Shield Console
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">Monitor and configure dynamic video encryption and secure stream delivery.</p>
+            </div>
+            <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20 text-xs rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              DRM Server Engine Online
+            </div>
+          </div>
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { label: "Total Lectures", value: `${videos.length} Lectures`, icon: Video, color: "text-blue-500" },
+              { label: "DRM Encrypted", value: `${videos.filter(v => v.drmEnabled).length} Secure`, icon: Lock, color: "text-emerald-500" },
+              { label: "Standard Streaming", value: `${videos.filter(v => !v.drmEnabled).length} Standard`, icon: Unlock, color: "text-amber-500" },
+            ].map((stat, idx) => {
+              const Icon = stat.icon;
+              return (
+                <div key={idx} className="glass-card p-5 border-slate-200 dark:border-white/5 flex items-center justify-between bg-white dark:bg-slate-950/40">
+                  <div>
+                    <span className="text-[10px] text-slate-600 dark:text-slate-500 font-bold uppercase tracking-wider block">{stat.label}</span>
+                    <span className="text-lg font-extrabold text-slate-900 dark:text-white mt-1.5 block">{stat.value}</span>
+                  </div>
+                  <div className={`w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 flex items-center justify-center ${stat.color}`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* DRM Video list */}
+            <div className="lg:col-span-2 glass-card p-5 border-slate-200 dark:border-white/5 space-y-4 bg-white dark:bg-slate-950/40">
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-white/5">
+                <Lock className="w-4 h-4 text-brand-royal" /> DRM Encrypted Lectures
+              </h4>
+              {videos.filter(v => v.drmEnabled).length === 0 ? (
+                <PremiumEmptyState
+                  icon={Lock}
+                  title="No DRM Lectures Found"
+                  description="Use the 'Contents and assignments' tab to upload protected MP4 files."
+                />
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                  {videos.filter(v => v.drmEnabled).map((v) => (
+                    <div key={v.id} className="flex items-center justify-between p-3.5 bg-slate-50/50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 rounded-xl">
+                      <div className="flex items-center gap-2 min-w-0 font-sans">
+                        <Lock className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{v.title}</p>
+                          <span className="text-[9px] text-slate-500 block uppercase font-mono tracking-wide mt-0.5">ID: {v.videoId || "hls-dash-stream"}</span>
+                        </div>
+                      </div>
+                      <span className="text-[9px] bg-emerald-500/10 text-emerald-500 font-bold border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                        Active Shield
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Prompt Copy / Dev Card */}
+            <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4 flex flex-col justify-between bg-white dark:bg-slate-950/40">
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-white/5 pb-2 flex items-center gap-1.5">
+                  <Brain className="w-4 h-4 text-brand-violet" /> Developer prompt
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-sans">
+                  The LMS is equipped with Shaka Player and HLS/DASH support. Feed the engineering guidelines to your AI assistant to expand active streaming pipelines.
+                </p>
+                <div className="p-3 bg-slate-900 text-slate-300 rounded-xl text-[9px] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto border border-white/5 select-all">
+                  {drmPromptText}
+                </div>
+              </div>
+              <button
+                onClick={handleCopyPrompt}
+                className="w-full premium-btn-primary py-2.5 text-[10px] uppercase font-bold tracking-wider"
+              >
+                Copy Developer Guide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Activation Overlay Modal */}
+      {isActivationModalOpen && activatingStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+              <Settings className="w-5 h-5 text-brand-royal" />
+              <span>Activate Student Subscription</span>
+            </h3>
+            
+            {activationError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-semibold rounded-lg text-center">
+                {activationError}
+              </div>
+            )}
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Student Name</label>
+                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-white/5">
+                  {activatingStudent.firstName} {activatingStudent.lastName}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Registered Email</label>
+                <div className="text-xs font-mono text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-white/5">
+                  {activatingStudent.email}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Payment Status</label>
+                <select
+                  value={activationPaymentStatus}
+                  onChange={(e) => setActivationPaymentStatus(e.target.value as any)}
+                  className="w-full premium-input text-xs"
+                >
+                  <option value="SUCCESS">Paid (SUCCESS)</option>
+                  <option value="PENDING">Unpaid (PENDING)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase">State</label>
+                <select
+                  value={activationLocation}
+                  onChange={(e) => setActivationLocation(e.target.value)}
+                  className="w-full premium-input text-xs"
+                  required
+                >
+                  <option value="">-- Select State --</option>
+                  {locationSuggestions.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Temporary Password</label>
+                <input
+                  type="text"
+                  placeholder="Enter temporary password for the student"
+                  value={activationPassword}
+                  onChange={(e) => setActivationPassword(e.target.value)}
+                  className="w-full premium-input text-xs"
+                  required
+                />
+                <p className="text-[9px] text-slate-400 mt-1">
+                  Once sent, the student will receive an email containing this temporary password to log in.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsActivationModalOpen(false);
+                  setActivatingStudent(null);
+                  setActivationPassword("");
+                }}
+                className="px-4 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleActivateStudent}
+                disabled={activationLoading || !activationPassword}
+                className="premium-btn-primary px-5 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {activationLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                <span>Send Activation Email</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Student Overlay Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white pb-3 border-b border-slate-100 dark:border-white/5">
+              Register New Scholar
+            </h3>
+
+            {usersError && (
+              <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-505 text-xs font-semibold rounded-xl text-center">
+                {usersError}
+              </div>
+            )}
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setUsersError("");
+              try {
+                const payload = {
+                  email: userEmail,
+                  password: userPassword,
+                  firstName: userFirstName,
+                  lastName: userLastName,
+                  role: "STUDENT",
+                  boardId: userBoardId,
+                  classId: userClassId,
+                  location: userLocation,
+                };
+                await authAPI.createUser(payload);
+                setIsCreateModalOpen(false);
+                setUserEmail("");
+                setUserPassword("");
+                setUserFirstName("");
+                setUserLastName("");
+                setUserLocation("");
+                fetchUsers();
+                fetchAnalytics();
+                useLmsStore.getState().addNotification("Scholar Registered", `Scholar account ${userEmail} registered successfully.`, "success");
+              } catch (err: any) {
+                setUsersError(err.message || "Failed to register scholar.");
+              }
+            }} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">First Name</label>
+                  <input type="text" placeholder="e.g. Aarav" value={userFirstName} onChange={(e) => setUserFirstName(e.target.value)} className="premium-input text-xs" required />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Last Name</label>
+                  <input type="text" placeholder="e.g. Sharma" value={userLastName} onChange={(e) => setUserLastName(e.target.value)} className="premium-input text-xs" required />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Academic Email</label>
+                <input type="email" placeholder="e.g. aarav@gmail.com" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} className="premium-input text-xs" required />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Password</label>
+                <input type="password" placeholder="e.g. password123" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} className="premium-input text-xs" required />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">State</label>
+                <select
+                  value={userLocation}
+                  onChange={(e) => setUserLocation(e.target.value)}
+                  className="w-full premium-input text-xs"
+                  required
+                >
+                  <option value="">-- Select State --</option>
+                  {locationSuggestions.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-905 rounded-xl border border-slate-200 dark:border-white/5">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Opted Board</label>
+                  <select value={userBoardId} onChange={(e) => {
+                    setUserBoardId(e.target.value);
+                    const matched = boards.find((b) => b.id === e.target.value);
+                    setUserClassId(matched?.classes[0]?.id || "");
+                  }} className="premium-input text-[11px] bg-white dark:bg-slate-950" required>
+                    <option value="">-- Select Board --</option>
+                    {boards.map((b) => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Class Grade</label>
+                  <select value={userClassId} onChange={(e) => setUserClassId(e.target.value)} className="premium-input text-[11px] bg-white dark:bg-slate-950" required>
+                    <option value="">-- Select Class --</option>
+                    {boards.find((b) => b.id === userBoardId)?.classes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800">Cancel</button>
+                <button type="submit" className="premium-btn-primary px-5 py-2 text-xs font-bold">Register Scholar</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

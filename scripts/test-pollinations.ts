@@ -4,10 +4,11 @@ async function test() {
     try {
       console.log(`Testing model: ${model}...`);
       const start = Date.now();
-      const response = await fetch(`https://text.pollinations.ai/?model=${model}`, {
+      const response = await fetch(`https://text.pollinations.ai/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          model: model,
           messages: [
             { role: "user", content: "Say hello in 3 words." }
           ]

@@ -363,10 +363,10 @@ export const QuizInterface: React.FC = () => {
                   <div className="flex items-center justify-between border-t border-slate-200 dark:border-white/5 pt-4 mt-4">
                     <div className="flex items-center gap-3 text-[10px] text-slate-500 font-semibold">
                       <span className="flex items-center gap-1">
-                        <HelpCircle className="w-3.5 h-3.5" /> 15 MCQs
+                        <HelpCircle className="w-3.5 h-3.5" /> 10 MCQs
                       </span>
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> 15 Mins
+                        <Clock className="w-3.5 h-3.5" /> 10 Mins
                       </span>
                     </div>
                     <button

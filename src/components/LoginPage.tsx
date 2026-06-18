@@ -108,7 +108,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ mode = "student" }) => {
       const profile = {
         ...result.user,
         role: result.role as "student" | "teacher" | "admin",
-        subjectArea: result.role === "teacher" ? selectedSubject : undefined,
+        subjectArea: result.role === "teacher" ? (result.user.subjectArea || "Mathematics") : undefined,
       };
 
       if (profile.role === "student" && !profile.optedSubjectId) {
@@ -336,22 +336,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ mode = "student" }) => {
             </div>
           </div>
 
-          {role === "teacher" && (
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
-                Subject Area
-              </label>
-              <select
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-                className="w-full bg-white dark:bg-slate-950/50 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-brand-royal"
-              >
-                <option value="Mathematics">Mathematics</option>
-                <option value="Physics">Physics</option>
-                <option value="Chemistry">Chemistry</option>
-              </select>
-            </div>
-          )}
+
 
           {/* Password */}
           <div className="space-y-1.5">

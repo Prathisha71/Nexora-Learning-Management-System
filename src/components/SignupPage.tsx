@@ -200,14 +200,17 @@ export const SignupPage: React.FC = () => {
       const localExists = students.some((s) => s.email?.toLowerCase() === trimmedEmail);
       
       let dbExists = false;
+      let checkSucceeded = false;
       try {
         const checkRes = await authAPI.checkEmail(trimmedEmail);
         dbExists = checkRes.exists;
+        checkSucceeded = true;
       } catch (err) {
         console.warn("Server duplicate email check failed. Falling back to local verification only.", err);
       }
 
-      if (localExists || dbExists) {
+      const isRegistered = checkSucceeded ? dbExists : localExists;
+      if (isRegistered) {
         setEmailError("This Gmail address is already registered.");
         isValid = false;
       }

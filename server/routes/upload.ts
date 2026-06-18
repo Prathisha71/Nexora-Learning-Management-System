@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth, requireAdmin, requireAdminOrTeacher } from '../middleware/auth.js';
 import { uploadToMinio, buildStorageKey, deleteFromMinio } from '../lib/minio.js';
+import { processVideoForDrm, isFfmpegAvailable } from '../lib/drm-processor.js';
 import { prisma } from '../lib/prisma.js';
 
 const router = Router();
@@ -27,6 +28,17 @@ const upload = multer({
     } else {
       cb(new Error(`File type not allowed: ${file.mimetype}`));
     }
+  },
+});
+
+// Larger limit for video file uploads (notes/assignments stay at 5 MB)
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error(`File type not allowed: ${file.mimetype}`));
   },
 });
 
@@ -100,6 +112,10 @@ router.post(
         fileUrl = `/uploads/${key}`;
       }
 
+      // Resolve uploader info
+      const uploadingUser = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+      const professorName = uploadingUser ? `${uploadingUser.firstName} ${uploadingUser.lastName}` : 'Professor';
+
       // Save note record in DB
       const note = await prisma.courseNote.create({
         data: {
@@ -108,14 +124,15 @@ router.post(
           topicId: topic.id,
           sortOrder: 999,
           isRequiredForComplete: false,
+          uploadedByUserId: req.auth!.userId,
+          uploadedByName: professorName,
+          subjectTitle: subjectTitle || null,
         },
       });
 
       // Send database notifications to corresponding class students
       try {
         const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
-        const uploadingUser = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
-        const professorName = uploadingUser ? `${uploadingUser.firstName} ${uploadingUser.lastName}` : 'Professor';
 
         if (subject?.classId) {
           const students = await prisma.student.findMany({ where: { classId: subject.classId } });
@@ -305,6 +322,47 @@ router.get('/upload/notes', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+//  GET /upload/notes/all
+//  List ALL notes across every subject (for student notes gallery)
+// ─────────────────────────────────────────────
+router.get('/upload/notes/all', requireAuth, async (_req, res) => {
+  try {
+    const notes = await prisma.courseNote.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        topic: {
+          include: {
+            chapter: {
+              include: {
+                unit: {
+                  include: {
+                    subject: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const enriched = notes.map((n) => ({
+      id: n.id,
+      title: n.title,
+      fileUrl: n.fileUrl,
+      uploadedByName: n.uploadedByName || 'Professor',
+      subjectTitle: n.subjectTitle || n.topic?.chapter?.unit?.subject?.name || 'General',
+      createdAt: n.createdAt,
+    }));
+
+    res.json({ notes: enriched });
+  } catch (err) {
+    console.error('Failed to fetch all notes:', err);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+// ─────────────────────────────────────────────
 //  GET /upload/assignments?subjectId=xxx
 //  List all assignments for a subject (with deadline-lock status)
 // ─────────────────────────────────────────────
@@ -386,19 +444,30 @@ router.post(
   '/upload/video',
   requireAuth,
   requireAdminOrTeacher,
-  upload.single('file'),
+  videoUpload.single('file'),
   async (req, res) => {
     try {
-      const { subjectId, title, duration, classTitle, subjectTitle } = req.body as {
+      const { subjectId, title, duration, classTitle, subjectTitle, videoUrl, drmProtected } = req.body as {
         subjectId?: string;
         title?: string;
         duration?: string;
         classTitle?: string;
         subjectTitle?: string;
+        videoUrl?: string;
+        drmProtected?: string;
       };
 
-      if (!req.file || !subjectId || !title) {
-        return res.status(400).json({ error: 'file, subjectId, and title are required' });
+      if (!subjectId || !title) {
+        return res.status(400).json({ error: 'subjectId and title are required' });
+      }
+
+      if (!req.file && !videoUrl) {
+        return res.status(400).json({ error: 'Either file or videoUrl is required' });
+      }
+
+      const enableDrm = drmProtected === 'true' && !!req.file;
+      if (enableDrm && !(await isFfmpegAvailable())) {
+        return res.status(503).json({ error: 'FFmpeg is required for DRM processing but was not found on the server' });
       }
 
       // Find a topic to attach the video to (first topic in subject)
@@ -411,25 +480,31 @@ router.post(
         return res.status(404).json({ error: 'No topic found for this subject' });
       }
 
-      const key = buildStorageKey(
-        'video',
-        classTitle || 'general',
-        subjectTitle || 'general',
-        req.file.originalname,
-      );
+      let fileUrl = videoUrl || '';
 
-      let fileUrl: string;
-      try {
-        fileUrl = await uploadToMinio(key, req.file.buffer, req.file.mimetype);
-      } catch (minioErr) {
-        console.warn('MinIO video upload failed, using local path:', minioErr);
-        fileUrl = `/uploads/${key}`;
+      if (req.file && !enableDrm) {
+        const key = buildStorageKey(
+          'video',
+          classTitle || 'general',
+          subjectTitle || 'general',
+          req.file.originalname,
+        );
+
+        try {
+          fileUrl = await uploadToMinio(key, req.file.buffer, req.file.mimetype);
+        } catch (minioErr) {
+          console.warn('MinIO video upload failed, using local path:', minioErr);
+          fileUrl = `/uploads/${key}`;
+        }
+      } else if (req.file && enableDrm) {
+        // Original kept in MinIO via DRM pipeline; videoUrl stores internal reference only
+        fileUrl = `drm-pending://${req.file.originalname}`;
       }
 
       // Duration parsing (input in minutes, convert to seconds)
       const durationSeconds = Math.max(10, Math.round(parseFloat(duration || '10') * 60));
 
-      // Save video record in DB
+      // Save video record in DB (DRM fields populated after processing for protected uploads)
       const video = await prisma.courseVideo.create({
         data: {
           title,
@@ -437,12 +512,46 @@ router.post(
           duration: durationSeconds,
           topicId: topic.id,
           sortOrder: 999,
+          drmEnabled: enableDrm ? true : undefined,
         },
       });
 
+      if (enableDrm && req.file) {
+        try {
+          const drmResult = await processVideoForDrm(video.id, req.file.buffer, req.file.originalname);
+          const updated = await prisma.courseVideo.update({
+            where: { id: video.id },
+            data: {
+              drmEnabled: true,
+              encryptedPath: drmResult.encryptedPath,
+              hlsPath: drmResult.hlsPath,
+              dashPath: drmResult.dashPath,
+              licenseId: drmResult.licenseId,
+              drmMetadata: drmResult.drmMetadata,
+              videoUrl: drmResult.encryptedPath,
+            },
+          });
+
+          return res.status(201).json({
+            success: true,
+            video: {
+              id: updated.id,
+              title: updated.title,
+              videoUrl: updated.videoUrl,
+              duration: updated.duration,
+              drmEnabled: true,
+            },
+          });
+        } catch (drmErr) {
+          console.error('DRM processing failed:', drmErr);
+          await prisma.courseVideo.delete({ where: { id: video.id } }).catch(() => undefined);
+          return res.status(500).json({ error: 'DRM video processing failed' });
+        }
+      }
+
       res.status(201).json({
         success: true,
-        video: { id: video.id, title: video.title, videoUrl: video.videoUrl, duration: video.duration },
+        video: { id: video.id, title: video.title, videoUrl: video.videoUrl, duration: video.duration, drmEnabled: false },
       });
     } catch (err) {
       console.error('Video upload error:', err);
@@ -486,7 +595,12 @@ router.delete('/upload/video/:id', requireAuth, requireAdminOrTeacher, async (re
 router.use((err: any, req: any, res: any, next: any) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'File size exceeds the 5MB limit. Please upload a smaller file.' });
+      const isVideoRoute = req.originalUrl?.includes('/upload/video');
+      return res.status(400).json({
+        error: isVideoRoute
+          ? 'Video file exceeds the 500MB limit.'
+          : 'File size exceeds the 5MB limit. Please upload a smaller file.',
+      });
     }
     return res.status(400).json({ error: err.message });
   } else if (err) {

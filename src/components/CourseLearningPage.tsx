@@ -5,6 +5,7 @@ import { useLmsStore } from "../store/index";
 import type { Topic, Chapter, Subject } from "../store/types";
 import { getChapterContent, getSubjectType } from "../store/curriculumData";
 import { quizAPI } from "../services/api";
+import { DRMVideoPlayer } from "./DRMVideoPlayer";
 
 const getTopicThumbnail = (subjectName: string = "", chapterName: string = "", topicName: string = ""): string => {
   const subj = subjectName.toLowerCase();
@@ -124,6 +125,13 @@ export const CourseLearningPage: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const playerContainerRef = useRef<HTMLDivElement>(null);
 
+  const getYouTubeId = (url?: string) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
+
   const handleToggleFullscreen = () => {
     if (!playerContainerRef.current) return;
     if (!document.fullscreenElement) {
@@ -144,6 +152,21 @@ export const CourseLearningPage: React.FC = () => {
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
 
@@ -180,6 +203,9 @@ export const CourseLearningPage: React.FC = () => {
   const activeTopic =
     activeChapter?.topics.find((t) => t.id === activeTopicId) ||
     activeChapter?.topics[0];
+
+  const youtubeId = getYouTubeId(activeTopic?.videoUrl);
+  const useDrmPlayer = activeTopic?.drmEnabled === true && !!activeTopic?.videoId;
 
 
 
@@ -620,95 +646,116 @@ export const CourseLearningPage: React.FC = () => {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
       {/* Left Column: Player & Tabs */}
       <div className="lg:col-span-2 space-y-6">
-        {/* Custom Mock Video Player */}
+        {/* Custom Mock/YouTube Video Player */}
         <div
           ref={playerContainerRef}
           className="relative aspect-[16/9] w-full rounded-2xl bg-black border border-white/10 shadow-2xl overflow-hidden group video-glow-container"
           style={isFullscreen ? { aspectRatio: "auto", height: "100%", width: "100%" } : {}}
         >
-          {/* Simulated Video Stream */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-30 filter blur-[1px]"
-              style={{
-                backgroundImage: `url('${getTopicThumbnail(activeSubject?.title, activeChapter?.title, activeTopic?.title)}')`,
+          {youtubeId ? (
+            <iframe
+              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=0&rel=0`}
+              title={activeTopic?.title}
+              className="w-full h-full absolute inset-0 border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          ) : useDrmPlayer ? (
+            <DRMVideoPlayer
+              videoId={activeTopic!.videoId!}
+              title={activeTopic?.title}
+              containerRef={playerContainerRef}
+              onTimeUpdate={(t) => {
+                setCurrentTime(Math.floor(t));
               }}
             />
+          ) : (
+            <>
+              {/* Simulated Video Stream */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div
+                  className="absolute inset-0 bg-cover bg-center opacity-30 filter blur-[1px]"
+                  style={{
+                    backgroundImage: `url('${getTopicThumbnail(activeSubject?.title, activeChapter?.title, activeTopic?.title)}')`,
+                  }}
+                />
 
-            {/* Pulsing play button overlay when paused */}
-            {!isPlaying && (
-              <button
-                type="button"
-                onClick={() => setIsPlaying(true)}
-                className="w-20 h-20 rounded-full bg-black/60 hover:bg-black/85 border border-white/20 flex items-center justify-center relative z-10 hover:scale-110 active:scale-95 transition-all shadow-2xl shadow-black/50 group cursor-pointer animate-pulse-slow"
-              >
-                <Play className="w-8 h-8 text-white fill-white translate-x-0.5 transition-transform duration-300 group-hover:scale-110" />
-              </button>
-            )}
+                {/* Pulsing play button overlay when paused */}
+                {!isPlaying && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPlaying(true)}
+                    className="w-20 h-20 rounded-full bg-black/60 hover:bg-black/85 border border-white/20 flex items-center justify-center relative z-10 hover:scale-110 active:scale-95 transition-all shadow-2xl shadow-black/50 group cursor-pointer animate-pulse-slow"
+                  >
+                    <Play className="w-8 h-8 text-white fill-white translate-x-0.5 transition-transform duration-300 group-hover:scale-110" />
+                  </button>
+                )}
 
-            {/* Context Watermark */}
-            <div className="absolute top-4 left-4 text-[9px] text-white/20 select-none font-mono tracking-widest z-10">
-              NEXORA LEARNING SECURE STREAM // IP: 192.168.1.1
-            </div>
-          </div>
-
-          {/* Custom Player Controls HUD */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-black/85 border-t border-white/10 flex flex-col gap-2 z-20">
-            {/* Progress Bar (Click to Seek) */}
-            <div
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const width = rect.width;
-                const newPercent = clickX / width;
-                setCurrentTime(Math.floor(newPercent * videoDuration));
-              }}
-              className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer relative overflow-hidden"
-            >
-              <div
-                className="h-full bg-brand-royal"
-                style={{ width: `${(currentTime / videoDuration) * 100}%` }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-white transition-colors"
-                >
-                  {isPlaying ? (
-                    <Pause className="w-5 h-5 fill-current" />
-                  ) : (
-                    <Play className="w-5 h-5 fill-current" />
-                  )}
-                </button>
-
-                <span className="text-xs font-semibold text-slate-300 font-mono">
-                  {formatTime(currentTime)} / {formatTime(videoDuration)}
-                </span>
+                {/* Context Watermark */}
+                <div className="absolute top-4 left-4 text-[9px] text-white/20 select-none font-mono tracking-widest z-10">
+                  NEXORA LEARNING SECURE STREAM // IP: 192.168.1.1
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-white/5">
-                  {activeTopic?.title || "Chapter Topic"}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={handleToggleFullscreen}
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-white transition-colors"
-                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              {/* Custom Player Controls HUD */}
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-black/85 border-t border-white/10 flex flex-col gap-2 z-20">
+                {/* Progress Bar (Click to Seek) */}
+                <div
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const width = rect.width;
+                    const newPercent = clickX / width;
+                    setCurrentTime(Math.floor(newPercent * videoDuration));
+                  }}
+                  className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer relative overflow-hidden"
                 >
-                  {isFullscreen ? (
-                    <Minimize2 className="w-4.5 h-4.5" />
-                  ) : (
-                    <Maximize2 className="w-4.5 h-4.5" />
-                  )}
-                </button>
+                  <div
+                    className="h-full bg-brand-royal"
+                    style={{ width: `${(currentTime / videoDuration) * 100}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-white transition-colors"
+                    >
+                      {isPlaying ? (
+                        <Pause className="w-5 h-5 fill-current" />
+                      ) : (
+                        <Play className="w-5 h-5 fill-current" />
+                      )}
+                    </button>
+
+                    <span className="text-xs font-semibold text-slate-300 font-mono">
+                      {formatTime(currentTime)} / {formatTime(videoDuration)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-white/5">
+                      {activeTopic?.title || "Chapter Topic"}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleFullscreen}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-white transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                      {isFullscreen ? (
+                        <Minimize2 className="w-4.5 h-4.5" />
+                      ) : (
+                        <Maximize2 className="w-4.5 h-4.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Video Description & Header Info */}
@@ -721,6 +768,7 @@ export const CourseLearningPage: React.FC = () => {
               {activeTopic?.title || "Introductory Topic"}
             </h2>
           </div>
+
         </div>
 
         {/* Lower Workspace Tabs (Content explanation, Bookmarks, PDFs) */}
@@ -752,35 +800,50 @@ export const CourseLearningPage: React.FC = () => {
           <div className="p-1">
             {/* Tab: PDF notes */}
             {activeTab === "pdf" && (
-              <div className="space-y-4 font-sans text-left">
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Attached reference guide, printable hand-outs, and sample
-                  numericals.
-                </p>
-
-                {/* Clean notes webpage view redirect card */}
-                <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-300 dark:border-white/10 rounded-2xl bg-slate-50 dark:bg-slate-900/10 space-y-4 my-4">
-                  <div className="w-16 h-16 rounded-xl bg-brand-royal/10 dark:bg-brand-royal/20 flex items-center justify-center text-brand-royal dark:text-blue-400 border border-brand-royal/15 shadow-sm">
-                    <FileText className="w-8 h-8" />
-                  </div>
-                  <div className="text-center space-y-1">
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+              <div className="space-y-4 font-sans text-left animate-fade-in-up">
+                <style dangerouslySetInnerHTML={{__html: `
+                  @media print {
+                    body {
+                      display: none !important;
+                    }
+                  }
+                `}} />
+                
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/5 pb-2">
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
                       {getTopicPdfInfo(activeChapter?.title || "", activeTopic?.pdfUrl).name}
                     </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Standard syllabus study note handbook (PDF format, ~1.2 MB)
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Standard syllabus study note handbook
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      const pdfInfo = getTopicPdfInfo(activeChapter?.title || "", activeTopic?.pdfUrl);
-                      window.open(pdfInfo.url, "_blank");
-                    }}
-                    className="premium-btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2 rounded-xl shadow-md transition-all active:scale-95"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>View Notes in Full Webpage</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setView("secure-note-preview")}
+                      className="px-3.5 py-1.5 bg-brand-royal hover:bg-brand-royal/90 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-brand-royal/10 active:scale-95 cursor-pointer"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      <span>View Fullscreen</span>
+                    </button>
+                    <span className="text-[9px] bg-amber-500/10 text-amber-500 font-bold border border-amber-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      Preview Only (Protected)
+                    </span>
+                  </div>
+                </div>
+
+                <div 
+                  className="relative w-full h-[650px] border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden bg-slate-950 select-none shadow-inner"
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  {/* Secure PDF embed */}
+                  <iframe
+                    src={`${getTopicPdfInfo(activeChapter?.title || "", activeTopic?.pdfUrl).url}#toolbar=0&navpanes=0&scrollbar=1`}
+                    className="w-full h-full border-0"
+                    title="Notes Preview"
+                  />
+                  
+
                 </div>
               </div>
             )}

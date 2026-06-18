@@ -41,6 +41,7 @@ export interface Profile {
   achievements: Achievement[];
   certificates: Certificate[];
   subjectArea?: string;
+  phoneNumber?: string;
 }
 
 export interface Topic {
@@ -50,6 +51,8 @@ export interface Topic {
   duration: string;
   pdfUrl?: string;
   videoUrl?: string;
+  videoId?: string;
+  drmEnabled?: boolean;
   isCompleted?: boolean;
 }
 

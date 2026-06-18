@@ -25,6 +25,7 @@
     "@types/multer": "^2.1.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
+    "dayjs": "^1.11.21",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
@@ -36,6 +37,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-time-picker": "^8.0.3",
+    "shaka-player": "^4.16.37",
     "zustand": "^4.4.0"
   },
   "devDependencies": {

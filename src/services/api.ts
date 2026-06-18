@@ -135,6 +135,18 @@ export const authAPI = {
     }
     return res.json();
   },
+  verifyOtp: async (email: string, otp: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Invalid OTP');
+    }
+    return res.json();
+  },
   resetPassword: async (email: string, otp: string, newPassword: string) => {
     const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
       method: 'POST',
@@ -147,7 +159,7 @@ export const authAPI = {
     }
     return res.json();
   },
-  activateUser: async (id: string, payload: { paymentStatus: string; password?: string }) => {
+  activateUser: async (id: string, payload: { paymentStatus: string; password?: string; location?: string }) => {
     const token = localStorage.getItem("auth_token");
     const res = await fetch(`${API_BASE_URL}/auth/users/${id}/activate`, {
       method: "POST",
@@ -344,6 +356,24 @@ export const assignmentAPI = {
       },
     );
     if (!res.ok) throw new Error("Failed to fetch submissions");
+    return res.json();
+  },
+};
+
+// ========================================
+// VIDEO / DRM PLAYBACK
+// ========================================
+
+export const videoAPI = {
+  getPlayback: async (videoId: string) => {
+    const token = localStorage.getItem("auth_token");
+    const res = await fetch(`${API_BASE_URL}/videos/${videoId}/playback`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Playback access denied");
+    }
     return res.json();
   },
 };

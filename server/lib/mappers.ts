@@ -16,7 +16,13 @@ export function mapTopic(topic: {
   name: string;
   studentProgress?: Array<{ isCompleted: boolean }>;
   notes?: Array<{ id: string; title: string; fileUrl: string }>;
-  videos?: Array<{ id: string; title: string; videoUrl: string; duration: number }>;
+  videos?: Array<{
+    id: string;
+    title: string;
+    videoUrl: string;
+    duration: number;
+    drmEnabled?: boolean | null;
+  }>;
 }) {
   const firstNote = topic.notes?.[0];
   const firstVideo = topic.videos?.[0];
@@ -29,6 +35,8 @@ export function mapTopic(topic: {
     isCompleted: topic.studentProgress?.[0]?.isCompleted ?? false,
     pdfUrl: firstNote?.fileUrl || undefined,
     videoUrl: firstVideo?.videoUrl || undefined,
+    videoId: firstVideo?.id || undefined,
+    drmEnabled: firstVideo?.drmEnabled === true,
   };
 }
 
@@ -160,6 +168,12 @@ export function mapUserProfile(user: {
   firstName: string;
   lastName: string;
   role: string;
+  location?: string | null;
+  phoneNumber?: string | null;
+  teacherProfile?: {
+    qualification?: string | null;
+    bio?: string | null;
+  } | null;
   studentProfile?: {
     boardId: string;
     classId: string;
@@ -184,5 +198,8 @@ export function mapUserProfile(user: {
     streak: user.studentProfile?.learningStreak?.currentStreak ?? 1,
     achievements: [],
     certificates: [],
+    phoneNumber: user.phoneNumber || '',
+    subjectArea: user.teacherProfile?.qualification || '',
+    location: user.location || '',
   };
 }

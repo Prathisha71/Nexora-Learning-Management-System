@@ -13,6 +13,44 @@ import {
   BookOpen,
 } from "lucide-react";
 
+// Helper function to determine meeting status based on current time in local timezone
+const getMeetingStatus = (date: string, startTime: string, endTime: string): "Live" | "Upcoming" | "Ended" => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const currentDateStr = `${year}-${month}-${day}`; // local YYYY-MM-DD
+
+  const parseTimeToMinutes = (timeStr: string) => {
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) {
+      const parts = timeStr.split(':').map(Number);
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
+    }
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const ap = match[3].toUpperCase();
+    if (ap === "PM" && h < 12) h += 12;
+    if (ap === "AM" && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = parseTimeToMinutes(startTime);
+  const endMinutes = parseTimeToMinutes(endTime);
+
+  if (date > currentDateStr) return "Upcoming";
+  if (date < currentDateStr) return "Ended";
+
+  if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+    return "Live";
+  } else if (currentMinutes >= endMinutes) {
+    return "Ended";
+  } else {
+    return "Upcoming";
+  }
+};
+
 export const StudentDashboard: React.FC = () => {
   const { setView, profile, boards, assignments, setActiveCourseContext, joinLiveRoom } =
     useLmsStore();
@@ -24,6 +62,7 @@ export const StudentDashboard: React.FC = () => {
     activeBoard?.classes?.[0];
 
   const [dbMeetings, setDbMeetings] = useState<any[]>([]);
+  const [, setStatusRefresh] = useState(0); // Trigger to update status every minute
 
   useEffect(() => {
     const fetchDbMeetings = async () => {
@@ -50,6 +89,14 @@ export const StudentDashboard: React.FC = () => {
     const interval = setInterval(fetchDbMeetings, 5000);
     return () => clearInterval(interval);
   }, [activeClass?.title]);
+
+  // Update status every minute as time changes
+  useEffect(() => {
+    const statusInterval = setInterval(() => {
+      setStatusRefresh((prev) => prev + 1);
+    }, 60000); // Refresh every minute
+    return () => clearInterval(statusInterval);
+  }, []);
 
   if (!activeBoard || !activeClass) {
     return (
@@ -274,75 +321,85 @@ export const StudentDashboard: React.FC = () => {
               Upcoming & Active Live Classes
             </h3>
             <div className="space-y-3">
-              {dbMeetings.length === 0 ? (
-                <div className="glass-card p-5 border-slate-200 dark:border-white/5 rounded-none">
-                  <p className="text-xs text-slate-650 dark:text-slate-550 text-center py-4 rounded-none">
-                    No active or scheduled live classes for {activeClass?.title || "your class"}. Wait for your teacher to go live.
-                  </p>
-                </div>
-              ) : (
-                dbMeetings.map((cls) => (
-                  <div key={cls.id} className="glass-card p-5 border-slate-200 dark:border-white/5 flex flex-col justify-between hover:border-brand-royal/30 transition-all text-left bg-white dark:bg-slate-950/80 rounded-none relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        {cls.status === "Live" ? (
-                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-none animate-pulse" /> Live Now
+              {(() => {
+                const activeOrUpcoming = dbMeetings.filter((cls) => {
+                  const calculatedStatus = getMeetingStatus(cls.date, cls.startTime, cls.endTime);
+                  return calculatedStatus !== "Ended";
+                });
+                if (activeOrUpcoming.length === 0) {
+                  return (
+                    <div className="glass-card p-5 border-slate-200 dark:border-white/5 rounded-none">
+                      <p className="text-xs text-slate-650 dark:text-slate-550 text-center py-4 rounded-none">
+                        No active or scheduled live classes for {activeClass?.title || "your class"}. Wait for your teacher to go live.
+                      </p>
+                    </div>
+                  );
+                }
+                return activeOrUpcoming.map((cls) => {
+                  const calculatedStatus = getMeetingStatus(cls.date, cls.startTime, cls.endTime);
+                  return (
+                    <div key={cls.id} className="glass-card p-5 border-slate-200 dark:border-white/5 flex flex-col justify-between hover:border-brand-royal/30 transition-all text-left bg-white dark:bg-slate-950/80 rounded-none relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          {calculatedStatus === "Live" ? (
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-none animate-pulse" /> Live Now
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-blue-500/10 text-blue-600 border border-blue-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
+                              Upcoming
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-500 dark:text-slate-500 font-bold tracking-wider">
+                            CODE: <span className="font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded-none">{cls.roomName}</span>
                           </span>
-                        ) : (
-                          <span className="text-[10px] bg-blue-500/10 text-blue-600 border border-blue-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
-                            Upcoming
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-500 dark:text-slate-500 font-bold tracking-wider">
-                          CODE: <span className="font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded-none">{cls.roomName}</span>
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mb-1">
-                        {cls.title}
-                      </h4>
-                      <p className="text-xs text-slate-700 dark:text-slate-400">
-                        Subject: <span className="font-semibold text-slate-800 dark:text-slate-300">{cls.subjectTitle}</span>
-                      </p>
-                      <p className="text-xs text-slate-700 dark:text-slate-400 mt-0.5">
-                        Teacher: <span className="font-semibold text-slate-800 dark:text-slate-300">{cls.teacherName}</span>
-                      </p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2 font-mono">
-                        Scheduled: {cls.date} • {cls.startTime} - {cls.endTime}
-                      </p>
-                      {cls.description && (
-                        <p className="text-xs text-slate-650 dark:text-slate-400 mt-2 italic border-l-2 border-slate-200 dark:border-slate-800 pl-2">
-                          "{cls.description}"
+                        </div>
+                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mb-1">
+                          {cls.title}
+                        </h4>
+                        <p className="text-xs text-slate-700 dark:text-slate-400">
+                          Subject: <span className="font-semibold text-slate-800 dark:text-slate-300">{cls.subjectTitle}</span>
                         </p>
+                        <p className="text-xs text-slate-700 dark:text-slate-400 mt-0.5">
+                          Teacher: <span className="font-semibold text-slate-800 dark:text-slate-300">{cls.teacherName}</span>
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2 font-mono">
+                          Scheduled: {cls.date} • {cls.startTime} - {cls.endTime}
+                        </p>
+                        {cls.description && (
+                          <p className="text-xs text-slate-650 dark:text-slate-400 mt-2 italic border-l-2 border-slate-200 dark:border-slate-800 pl-2">
+                            "{cls.description}"
+                          </p>
+                        )}
+                      </div>
+
+                      {calculatedStatus === "Live" ? (
+                        <button
+                          onClick={() => {
+                            joinLiveRoom({
+                              roomName: cls.roomName,
+                              participantName: profile.name,
+                              isTeacher: false
+                            });
+                            setView("webrtc-live");
+                          }}
+                          className="mt-4 w-full py-2 bg-brand-royal hover:bg-brand-royal/90 text-white rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <span>Join Live Meeting</span>
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="mt-4 w-full py-2 bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-600 rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-200 dark:border-white/5"
+                        >
+                          <span>Starts soon</span>
+                        </button>
                       )}
                     </div>
-
-                    {cls.status === "Live" ? (
-                      <button
-                        onClick={() => {
-                          joinLiveRoom({
-                            roomName: cls.roomName,
-                            participantName: profile.name,
-                            isTeacher: false
-                          });
-                          setView("webrtc-live");
-                        }}
-                        className="mt-4 w-full py-2 bg-brand-royal hover:bg-brand-royal/90 text-white rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <span>Join Live Meeting</span>
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="mt-4 w-full py-2 bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-600 rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-200 dark:border-white/5"
-                      >
-                        <span>Starts soon</span>
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
+                  );
+                });
+              })()}
             </div>
           </div>
 

@@ -2255,7 +2255,7 @@ export const initialBoards = [
                     "title": "Introduction to Sets",
                     "content": "Definition, notation, types of sets.",
                     "duration": "15m",
-                    "videoUrl": "https://www.w3schools.com/html/movie.mp4"
+                    "videoUrl": "https://youtu.be/aojFzrZPB4k?si=8uVbKtdWGZ06V8-J"
                   },
                   {
                     "id": "cl9-maths-ch1-t2",

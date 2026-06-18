@@ -5,8 +5,6 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
-  User,
-  GraduationCap,
   Shield,
   Video,
   Award,
@@ -20,6 +18,9 @@ export const DemoPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { setView, addNotification, isDarkMode, toggleDarkMode, boards, profile } = useLmsStore();
   const [loadingRole, setLoadingRole] = useState<string | null>(null);
+
+  // Only visible for admin role
+  if (!profile || profile.role !== 'admin') return null;
 
   // Dragging states
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -240,35 +241,19 @@ export const DemoPanel: React.FC = () => {
             </button>
           </div>
 
-          {/* Simulate User Role */}
+          {/* Admin Quick Access */}
           <div className="space-y-2 mb-4">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Simulate User Role
+              Admin Quick Access
             </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                disabled={loadingRole !== null}
-                onClick={() => handleSimulateRole("student")}
-                className="flex flex-col items-center justify-center p-2 bg-slate-900/50 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl transition-all text-xs font-semibold text-slate-300 disabled:opacity-50"
-              >
-                <User className="w-4 h-4 mb-1 text-blue-500" />
-                <span>Student</span>
-              </button>
-              <button
-                disabled={loadingRole !== null}
-                onClick={() => handleSimulateRole("teacher")}
-                className="flex flex-col items-center justify-center p-2 bg-slate-900/50 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl transition-all text-xs font-semibold text-slate-300 disabled:opacity-50"
-              >
-                <GraduationCap className="w-4 h-4 mb-1 text-emerald-500" />
-                <span>Teacher</span>
-              </button>
+            <div className="grid grid-cols-1 gap-1.5">
               <button
                 disabled={loadingRole !== null}
                 onClick={() => handleSimulateRole("admin")}
-                className="flex flex-col items-center justify-center p-2 bg-slate-900/50 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl transition-all text-xs font-semibold text-slate-300 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 p-2 bg-slate-900/50 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl transition-all text-xs font-semibold text-slate-300 disabled:opacity-50"
               >
-                <Shield className="w-4 h-4 mb-1 text-rose-500" />
-                <span>Admin</span>
+                <Shield className="w-4 h-4 text-rose-500" />
+                <span>Reload Admin Session</span>
               </button>
             </div>
           </div>

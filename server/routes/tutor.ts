@@ -6,23 +6,13 @@ const router = Router();
 
 // Initialize Gemini API
 const apiKey = process.env.GEMINI_API_KEY;
-const isApiKeyValid = apiKey && apiKey !== 'your-gemini-api-key-here' && apiKey.trim() !== '';
+const isApiKeyValid = apiKey && (apiKey.startsWith('AIzaSy') || apiKey.startsWith('AQ.')) && apiKey !== 'your-gemini-api-key-here' && apiKey.trim() !== '';
 const genAI = isApiKeyValid ? new GoogleGenerativeAI(apiKey) : null;
 const tutorModels = Array.from(
   new Set([process.env.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter(Boolean))
 );
 
-const buildFallbackAnswer = (question: string, reason: string) => `I'm your **AI Tutor Bot**, but the live AI service is temporarily unavailable.
 
-**Reason:** ${reason}
-
-Please try again in a minute. In the meantime, here's how I would approach your question:
-
-1. Identify the exact concept or formula involved.
-2. Write down the known values or facts from the problem.
-3. Solve one step at a time, checking each step before moving forward.
-
-*Current Question:* "${question}"`;
 
 const getSmartMockResponse = (question: string): string => {
   const q = question.toLowerCase();
@@ -136,20 +126,20 @@ router.post('/tutor', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Question is required' });
   }
 
-  // If the API key is not configured, query a free public LLM provider (Pollinations AI)
-  if (!genAI) {
-    console.warn('GEMINI_API_KEY is not set. Querying free public AI endpoint.');
-    
-    let textQuestion = question;
-    if (attachment && attachment.name) {
-      textQuestion = `[User attached file: ${attachment.name} (type: ${attachment.type})]\n\n${question}`;
-    }
+  let textQuestion = question;
+  if (attachment && attachment.name) {
+    textQuestion = `[User attached file: ${attachment.name} (type: ${attachment.type})]\n\n${question}`;
+  }
 
+  // Helper to query Pollinations AI as a free public fallback
+  const queryPollinations = async (): Promise<string | null> => {
     try {
+      console.log('Attempting Pollinations AI fallback...');
       const response = await fetch("https://text.pollinations.ai/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          model: "openai",
           messages: [
             {
               role: "system",
@@ -167,26 +157,36 @@ router.post('/tutor', requireAuth, async (req, res) => {
       });
 
       if (response.ok) {
-        const answer = await response.text();
-        return res.json({ answer });
+        const text = await response.text();
+        if (text && text.trim().length > 0) {
+          console.log('✅ Pollinations AI fallback succeeded.');
+          return text;
+        }
+      } else {
+        console.warn(`Pollinations AI returned non-ok status: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
-      console.error("Free public AI endpoint failed, falling back to local mock:", err);
+      console.error("Pollinations AI call failed:", err);
+    }
+    return null;
+  };
+
+  // If the Gemini API key is not configured/valid, query Pollinations AI directly
+  if (!genAI) {
+    console.warn('GEMINI_API_KEY is not configured or is invalid. Falling back to Pollinations AI.');
+    const pollinationsResult = await queryPollinations();
+    if (pollinationsResult) {
+      return res.json({ answer: pollinationsResult });
     }
     
     // Local fallback if Pollinations is offline/throttled
-    textQuestion = question;
-    if (attachment && attachment.name) {
-      textQuestion = `[User attached file: ${attachment.name} (type: ${attachment.type})]\n\n${question}`;
-    }
+    console.warn('Pollinations AI failed or throttled. Using local smart mock.');
     const fallbackAnswer = getSmartMockResponse(textQuestion);
     return res.json({ answer: fallbackAnswer });
   }
 
   try {
     // Format history for the Gemini API chat
-    // The Gemini chat API history expects the format:
-    // [{ role: 'user' | 'model', parts: [{ text: string }] }]
     const formattedHistory = Array.isArray(history) 
       ? history.map((msg: any) => {
           let msgText = '';
@@ -255,18 +255,14 @@ router.post('/tutor', requireAuth, async (req, res) => {
       }
     }
 
+    // If all Gemini models failed, silently fall back to smart topic response
     return res.json({
-      answer: buildFallbackAnswer(
-        question,
-        lastError?.status === 503
-          ? 'Google Gemini is currently reporting high demand.'
-          : 'The configured AI provider could not generate a response.'
-      ),
+      answer: getSmartMockResponse(question),
     });
   } catch (error: any) {
     console.error('Error querying Gemini API:', error);
     return res.json({
-      answer: buildFallbackAnswer(question, 'The AI tutor backend hit an unexpected error.'),
+      answer: getSmartMockResponse(question),
     });
   }
 });

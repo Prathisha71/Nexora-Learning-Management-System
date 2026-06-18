@@ -171,16 +171,52 @@ function getCategoryKey(subjectName: string, chapterName: string, topicName: str
   return "science-physics-motion";
 }
 
-function getQuestionsForTopic(subjectName: string, chapterName: string, topicName: string, topicId?: string) {
+async function getQuestionsForTopic(subjectName: string, chapterName: string, topicName: string, topicId?: string) {
   try {
     const questionsPath = path.join(process.cwd(), 'server', 'data', 'question-bank.json');
     if (fs.existsSync(questionsPath)) {
       const fileContent = fs.readFileSync(questionsPath, 'utf-8');
       const db = JSON.parse(fileContent);
-      const catKey = getCategoryKey(subjectName, chapterName, topicName);
-      if (db[catKey] && Array.isArray(db[catKey]) && db[catKey].length === 10) {
-        return db[catKey];
+
+      if (topicId) {
+        const topicKey = topicId;
+        const cleanTopicKey = topicName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+        if (db[topicKey]) {
+          return db[topicKey];
+        }
+        if (db[cleanTopicKey]) {
+          return db[cleanTopicKey];
+        }
       }
+
+      const catKey = getCategoryKey(subjectName, chapterName, topicName);
+      const allCatQuestions = db[catKey] || [];
+
+      if (topicId) {
+        // Find the topic's relative index within its siblings to partition the questions
+        const topic = await prisma.topic.findUnique({
+          where: { id: topicId },
+          select: { chapterId: true }
+        });
+
+        if (topic) {
+          const siblingTopics = await prisma.topic.findMany({
+            where: { chapterId: topic.chapterId },
+            orderBy: { sortOrder: 'asc' }
+          });
+          const topicIndex = siblingTopics.findIndex(t => t.id === topicId);
+
+          // Slice non-overlapping sets of 5 (or N) questions per topic
+          const questionsPerTopic = 5;
+          const start = Math.max(0, topicIndex) * questionsPerTopic;
+          const sliced = allCatQuestions.slice(start, start + questionsPerTopic);
+
+          if (sliced.length > 0) return sliced;
+        }
+      }
+
+      return allCatQuestions.slice(0, 5); // final fallback
     }
   } catch (err) {
     console.error('Failed to load questions from question-bank.json:', err);
@@ -211,31 +247,6 @@ function getQuestionsForTopic(subjectName: string, chapterName: string, topicNam
     {
       question: "For any square matrix A, which of the following is always a symmetric matrix?",
       options: ["A + Aᵀ", "A - Aᵀ", "Aᵀ", "A²"],
-      correctAnswerIndex: 0,
-    },
-    {
-      question: "If A is a square matrix of order n, then det(kA) is equal to:",
-      options: ["kⁿ det(A)", "k det(A)", "kⁿ⁺¹ det(A)", "nᵏ det(A)"],
-      correctAnswerIndex: 0,
-    },
-    {
-      question: "If the determinant of a matrix A is equal to zero, then its inverse matrix:",
-      options: ["Does not exist", "Is equal to A", "Is the identity matrix", "Is equal to zero"],
-      correctAnswerIndex: 0,
-    },
-    {
-      question: "If a matrix has 12 elements, how many possible orders can it have?",
-      options: ["6", "12", "4", "3"],
-      correctAnswerIndex: 0,
-    },
-    {
-      question: "A matrix in which all elements above or below the main diagonal are zero is called:",
-      options: ["Diagonal matrix", "Row matrix", "Column matrix", "Scalar matrix"],
-      correctAnswerIndex: 0,
-    },
-    {
-      question: "If A and B are square matrices of the same order, then (AB)⁻¹ is equal to:",
-      options: ["B⁻¹A⁻¹", "A⁻¹B⁻¹", "AB", "BA"],
       correctAnswerIndex: 0,
     }
   ];
@@ -273,7 +284,7 @@ router.get('/topics/:topicId/quizzes', async (req, res) => {
       });
 
       if (topic) {
-        const questionsToCreate = getQuestionsForTopic(
+        const questionsToCreate = await getQuestionsForTopic(
           topic.chapter.unit.subject.name,
           topic.chapter.name,
           topic.name,

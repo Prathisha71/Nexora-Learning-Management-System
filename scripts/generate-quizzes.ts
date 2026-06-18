@@ -143,10 +143,11 @@ async function generateWithPollinations(prompt: string): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
 
   try {
-    const response = await fetch("https://text.pollinations.ai/?model=openai", {
+    const response = await fetch("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        model: "openai",
         messages: [
           {
             role: "system",

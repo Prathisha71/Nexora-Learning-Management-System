@@ -126,12 +126,19 @@ export const LandingPage: React.FC = () => {
           </span>
         </h1>
 
-        <div className="flex justify-center mb-16 relative z-10">
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-16 relative z-10">
           <button
             onClick={() => setView("login-student")}
             className="w-full sm:w-auto px-8 py-3.5 rounded-none bg-brand-royal hover:bg-blue-650 text-white font-bold uppercase tracking-wider shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 group transform hover:-translate-y-0.5 active:translate-y-0"
           >
             <span>Enter Student Workspace</span>
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </button>
+          <button
+            onClick={() => setView("login-educator")}
+            className="w-full sm:w-auto px-8 py-3.5 rounded-none bg-white hover:bg-slate-50 text-slate-800 font-bold uppercase tracking-wider shadow-md hover:shadow-lg border border-slate-300 hover:border-slate-400 transition-all duration-200 flex items-center justify-center gap-2 group transform hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <span>Sign In as Educator</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
@@ -288,15 +295,24 @@ export const LandingPage: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center gap-8 text-xs sm:text-sm text-slate-500 font-medium">
-              <a href="#" className="hover:text-slate-900 transition-colors">
+              <button
+                onClick={() => setView("privacy-policy")}
+                className="hover:text-slate-900 transition-colors bg-transparent border-none p-0 cursor-pointer font-medium"
+              >
                 Privacy Policy
-              </a>
-              <a href="#" className="hover:text-slate-900 transition-colors">
+              </button>
+              <button
+                onClick={() => setView("terms-of-service")}
+                className="hover:text-slate-900 transition-colors bg-transparent border-none p-0 cursor-pointer font-medium"
+              >
                 Terms of Service
-              </a>
-              <a href="#" className="hover:text-slate-900 transition-colors">
+              </button>
+              <button
+                onClick={() => setView("contact-support")}
+                className="hover:text-slate-900 transition-colors bg-transparent border-none p-0 cursor-pointer font-medium"
+              >
                 Contact Support
-              </a>
+              </button>
             </div>
           </div>
           <div className="border-t border-slate-200/60 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] sm:text-xs text-slate-400">

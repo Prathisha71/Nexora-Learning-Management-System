@@ -512,21 +512,23 @@ router.post('/live-classes', requireAuth, async (req, res) => {
       const parseTime = (timeStr: string) => {
         const parts = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
         if (parts) {
-          let hours = parseInt(parts[1]);
-          const minutes = parseInt(parts[2]);
+          let hours = parseInt(parts[1], 10);
+          const minutes = parseInt(parts[2], 10);
           const ampm = parts[3].toUpperCase();
           if (ampm === 'PM' && hours < 12) hours += 12;
           if (ampm === 'AM' && hours === 12) hours = 0;
-          return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+          return [hours, minutes];
         }
-        return timeStr;
+        const numericParts = timeStr.split(':').map(Number);
+        return [numericParts[0] || 0, numericParts[1] || 0];
       };
 
-      const startFormatted = parseTime(startTime);
-      const endFormatted = parseTime(endTime);
+      const [startH, startM] = parseTime(startTime);
+      const [endH, endM] = parseTime(endTime);
+      const [year, month, day] = date.split('-').map(Number);
 
-      start = new Date(`${date}T${startFormatted}`);
-      end = new Date(`${date}T${endFormatted}`);
+      start = new Date(year, month - 1, day, startH, startM, 0, 0);
+      end = new Date(year, month - 1, day, endH, endM, 0, 0);
 
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         throw new Error('Invalid date format');
@@ -682,9 +684,22 @@ router.get('/live-classes', requireAuth, async (req, res) => {
       else if (lc.status === 'COMPLETED') status = 'Completed';
       else if (lc.status === 'CANCELLED') status = 'Cancelled';
 
-      const dateStr = lc.scheduledStart.toISOString().split('T')[0];
-      const startTimeStr = lc.scheduledStart.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-      const endTimeStr = lc.scheduledEnd.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      const year = lc.scheduledStart.getFullYear();
+      const month = String(lc.scheduledStart.getMonth() + 1).padStart(2, '0');
+      const day = String(lc.scheduledStart.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      const formatLocalTime = (d: Date) => {
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+      };
+
+      const startTimeStr = formatLocalTime(lc.scheduledStart);
+      const endTimeStr = formatLocalTime(lc.scheduledEnd);
 
       return {
         id: lc.id,

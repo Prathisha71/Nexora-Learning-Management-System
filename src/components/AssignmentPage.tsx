@@ -7,6 +7,8 @@ import {
   Check,
   AlertCircle,
   ArrowRight,
+  BookOpen,
+  GraduationCap,
   ShieldCheck,
   HelpCircle,
   CornerDownRight,
@@ -393,6 +395,37 @@ export const AssignmentPage: React.FC = () => {
                 );
               })
             )}
+          </div>
+        </div>
+
+        {/* ─── Teacher Uploaded Notes Section ─── */}
+        <div className="rounded-2xl overflow-hidden border border-brand-royal/20 dark:border-brand-royal/15 shadow-lg">
+          {/* Solid header */}
+          <div className="bg-brand-royal p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-white/60 block">Study Materials</span>
+                <h4 className="text-sm font-black text-white leading-tight">Teacher Uploaded Notes</h4>
+              </div>
+            </div>
+            <p className="text-[11px] text-white/70 leading-relaxed">
+              View all PDF notes &amp; study materials shared by your professors across every subject.
+            </p>
+          </div>
+          {/* CTA */}
+          <div className="bg-white dark:bg-slate-900/80 p-4">
+            <button
+              type="button"
+              onClick={() => setView("teacher-uploaded-notes")}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-brand-royal text-white text-xs font-bold shadow-md hover:bg-brand-royal/90 transition-all duration-200"
+            >
+              <BookOpen className="w-4 h-4" />
+              View All Uploaded Notes
+              <ArrowRight className="w-3.5 h-3.5 ml-auto" />
+            </button>
           </div>
         </div>
       </div>

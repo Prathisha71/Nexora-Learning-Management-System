@@ -11,6 +11,7 @@ import assignmentRoutes from './routes/assignment.js';
 import progressRoutes from './routes/progress.js';
 import tutorRoutes from './routes/tutor.js';
 import uploadRoutes from './routes/upload.js';
+import videoRoutes from './routes/videos.js';
 import liveClassRoutes from './routes/live-class.js';
 import notificationRoutes from './routes/notification.js';
 
@@ -42,6 +43,7 @@ app.use('/api', progressRoutes);
 app.use('/api', tutorRoutes);
 app.use('/api', liveClassRoutes);
 app.use('/api', uploadRoutes);
+app.use('/api', videoRoutes);
 app.use('/api', notificationRoutes);
 
 app.use((_req, res) => {
