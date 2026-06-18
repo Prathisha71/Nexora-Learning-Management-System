@@ -3,8 +3,9 @@
 // ========================================
 // This file handles all API calls to the backend
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+import { getApiBaseUrl } from "../utils/apiBase";
+
+const API_BASE_URL = `${getApiBaseUrl()}/api`;
 
 // ========================================
 // AUTH ENDPOINTS
@@ -105,6 +106,43 @@ export const authAPI = {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error("Failed to delete user");
+    return res.json();
+  },
+
+  subscribe: async (email: string, subscriptionPlan: string = "Full Academic Access Pass") => {
+    const res = await fetch(`${API_BASE_URL}/auth/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, subscriptionPlan }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.error || "Subscription failed");
+    }
+    return res.json();
+  },
+  forgotPassword: async (email: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to send OTP');
+    }
+    return res.json();
+  },
+  resetPassword: async (email: string, otp: string, newPassword: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, newPassword }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to reset password');
+    }
     return res.json();
   },
 };

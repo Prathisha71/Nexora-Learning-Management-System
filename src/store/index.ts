@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getApiBaseUrl } from "../utils/apiBase";
 import type {
   LMSStore,
   Board,
@@ -37,7 +38,199 @@ const defaultProfile: Profile = {
   certificates: [],
 };
 
-const defaultBoards: Board[] = [];
+const defaultBoards: Board[] = [
+  {
+    id: "tnsb",
+    title: "TN State Board",
+    code: "TNSB",
+    classes: [
+      {
+        id: "class-12",
+        title: "Class 12",
+        subjects: [
+          {
+            id: "maths-12-v1",
+            title: "Mathematics",
+            color: "#4f46e5",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+          {
+            id: "physics-12-v1",
+            title: "Physics",
+            color: "#8b5cf6",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+          {
+            id: "chemistry-12-v1",
+            title: "Chemistry",
+            color: "#ec4899",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "class-11",
+        title: "Class 11",
+        subjects: [
+          {
+            id: "maths-11-v1",
+            title: "Mathematics",
+            color: "#4f46e5",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+          {
+            id: "physics-11-v1",
+            title: "Physics",
+            color: "#8b5cf6",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+          {
+            id: "chemistry-11-v1",
+            title: "Chemistry",
+            color: "#ec4899",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "class-10",
+        title: "Class 10",
+        subjects: [
+          {
+            id: "maths-10",
+            title: "Mathematics",
+            color: "#4f46e5",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+          {
+            id: "science-10",
+            title: "Science",
+            color: "#10b981",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "class-9",
+        title: "Class 9",
+        subjects: [
+          {
+            id: "maths-9",
+            title: "Mathematics",
+            color: "#4f46e5",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+          {
+            id: "science-9",
+            title: "Science",
+            color: "#10b981",
+            imageUrl: undefined,
+            chapters: [
+              {
+                id: "chap-1",
+                title: "Chapter 1",
+                imageUrl: undefined,
+                topics: [
+                  { id: "topic-1", title: "Introduction", content: "", duration: "5m" }
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
 const defaultAssignments: Assignment[] = [];
 const defaultQuizzes: Quiz[] = [];
 const defaultNotifications: Notification[] = [
@@ -67,27 +260,13 @@ const getStoredProfile = (): Profile => {
 };
 
 const getStoredActiveView = (): string => {
-  const token = localStorage.getItem("auth_token");
-  const stored = localStorage.getItem("lms_user_profile");
-  if (token && stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed) {
-        if (parsed.role === "admin") return "admin-analytics";
-        if (parsed.role === "teacher") return "teacher-dash";
-        return "student-dash";
-      }
-    } catch {
-      return "landing";
-    }
-  }
   return "landing";
 };
 
-export const useLmsStore = create<LMSStore>((set) => ({
+export const useLmsStore = create<LMSStore>((set, get) => ({
   auth: {
-    isAuthenticated: localStorage.getItem("auth_token") !== null,
-    user: null,
+    isAuthenticated: !!localStorage.getItem("auth_token") && !!localStorage.getItem("lms_user_profile"),
+    user: getStoredProfile().id ? getStoredProfile() : null,
     token: localStorage.getItem("auth_token") || null,
     loading: false,
     error: null,
@@ -112,7 +291,7 @@ export const useLmsStore = create<LMSStore>((set) => ({
     });
   },
 
-  activeView: getStoredActiveView(),
+  activeView: "landing",
   setView: (view: string) => set({ activeView: view }),
 
   isDarkMode: localStorage.getItem("darkMode") === "true",
@@ -151,23 +330,72 @@ export const useLmsStore = create<LMSStore>((set) => ({
   activeChapterId: "",
   activeTopicId: "",
 
-  submitAssignment: (assignmentId, submissionFile) =>
-    set((state) => ({
-      assignments: state.assignments.map((assignment) =>
-        assignment.id === assignmentId
-          ? { ...assignment, submissionFile, status: "Submitted" }
-          : assignment,
-      ),
-    })),
+  submitAssignment: async (assignmentId, file) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${getApiBaseUrl()}/api/assignments/${assignmentId}/submit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+      if (res.ok) {
+        await get().fetchAssignments();
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to submit assignment");
+      }
+    } catch (err: any) {
+      console.warn("Failed to submit assignment:", err);
+      throw err;
+    }
+  },
 
-  gradeAssignment: (assignmentId, grade, feedback) =>
-    set((state) => ({
-      assignments: state.assignments.map((assignment) =>
-        assignment.id === assignmentId
-          ? { ...assignment, status: "Graded", grade, feedback }
-          : assignment,
-      ),
-    })),
+  gradeAssignment: async (assignmentId, grade, feedback) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      let submissionId = assignmentId;
+      if (assignmentId.includes("_")) {
+        submissionId = assignmentId.split("_")[1];
+      }
+      const match = grade.match(/(\d+)\/100/);
+      const marksObtained = match ? match[1] : "100";
+      const res = await fetch(`${getApiBaseUrl()}/api/assignments/submissions/${submissionId}/grade`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ marksObtained, comment: feedback })
+      });
+      if (res.ok) {
+        await get().fetchAssignments();
+      }
+    } catch (err) {
+      console.warn("Failed to grade assignment:", err);
+    }
+  },
+
+  fetchAssignments: async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/assignments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        set({ assignments: data.assignments || [] });
+      }
+    } catch (err) {
+      console.warn("Failed to fetch assignments:", err);
+    }
+  },
 
   setActiveQuiz: (quizId) => set({ activeQuizId: quizId }),
 
@@ -192,13 +420,40 @@ export const useLmsStore = create<LMSStore>((set) => ({
       ],
     })),
 
-  readAllNotifications: () =>
+  readAllNotifications: async () => {
     set((state) => ({
       notifications: state.notifications.map((notification) => ({
         ...notification,
         read: true,
       })),
-    })),
+    }));
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      await fetch(`${getApiBaseUrl()}/api/notifications/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.warn("Failed to sync read status with server:", err);
+    }
+  },
+
+  fetchNotifications: async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        set({ notifications: data.notifications || [] });
+      }
+    } catch (err) {
+      console.warn("Failed to fetch notifications:", err);
+    }
+  },
 
   addBookmark: (bookmark, timestamp) =>
     set((state) => ({

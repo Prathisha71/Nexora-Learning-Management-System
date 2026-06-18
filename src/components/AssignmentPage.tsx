@@ -19,9 +19,18 @@ export const AssignmentPage: React.FC = () => {
     boards.find((b) => b.id === profile.selectedBoardId) || boards[0];
 
   const activeClass =
-    activeBoard?.classes.find((c) => c.id === profile.selectedClassId) ||
-    activeBoard?.classes[0];
-  const classSubjectIds = activeClass?.subjects.map((s) => s.id) || [];
+    activeBoard?.classes?.find((c) => c.id === profile.selectedClassId) ||
+    activeBoard?.classes?.[0];
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
+
+  const classSubjectIds = activeClass?.subjects?.map((s) => s.id) || [];
   const classAssignments = assignments.filter((a) =>
     classSubjectIds.includes(a.subjectId),
   );
@@ -32,6 +41,9 @@ export const AssignmentPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Sync selectedAssignId when registered profile class changes
   React.useEffect(() => {
@@ -57,32 +69,50 @@ export const AssignmentPage: React.FC = () => {
     ? "text-emerald-500 dark:text-emerald-400"
     : "text-sky-500 dark:text-sky-400";
 
-  const handleSimulatedUpload = () => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!activeAssign || activeAssign.status !== "Pending") return;
-    setIsUploading(true);
-    setTimeout(() => {
-      setIsUploading(false);
-      setUploadedFileName(`${activeAssign.id}_submission_proof.pdf`);
-      setUploadSuccess(true);
-    }, 2000);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("File size exceeds 5MB limit. Please upload a smaller file.");
+      setUploadedFileName("");
+      setSelectedFile(null);
+      return;
+    }
+
+    setUploadError("");
+    setUploadedFileName(file.name);
+    setSelectedFile(file);
+    setUploadSuccess(false);
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadedFileName || !activeAssign) return;
+    if (!selectedFile || !activeAssign) return;
 
-    submitAssignment(activeAssign.id, uploadedFileName);
-    setUploadSuccess(false);
-    setUploadedFileName("");
-
-    // Trigger toast notification
-    useLmsStore
-      .getState()
-      .addNotification(
-        "Assignment Submitted",
-        `"${activeAssign.title}" has been uploaded successfully for educator review.`,
-        "success",
-      );
+    setIsUploading(true);
+    setUploadError("");
+    submitAssignment(activeAssign.id, selectedFile)
+      .then(() => {
+        setIsUploading(false);
+        setUploadSuccess(true);
+        setSelectedFile(null);
+        setUploadedFileName("");
+        
+        // Trigger toast notification
+        useLmsStore
+          .getState()
+          .addNotification(
+            "Assignment Submitted",
+            `"${activeAssign.title}" has been uploaded successfully for educator review.`,
+            "success",
+          );
+      })
+      .catch((err: any) => {
+        setIsUploading(false);
+        setUploadError(err.message || "Failed to submit assignment.");
+      });
   };
 
   return (
@@ -156,55 +186,80 @@ export const AssignmentPage: React.FC = () => {
             {/* Submit Action or Submission Status */}
             <div className="pt-4 border-t border-slate-200 dark:border-white/5">
               {activeAssign.status === "Pending" ? (
-                <form onSubmit={handleFormSubmit} className="space-y-4">
-                  <h4 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">
-                    File Submission
-                  </h4>
-
-                  {/* Upload Box */}
-                  <div
-                    onClick={handleSimulatedUpload}
-                    className="border-2 border-dashed border-slate-300 dark:border-white/10 hover:border-brand-royal/40 rounded-none p-6 text-center cursor-pointer transition-all bg-slate-50 dark:bg-slate-950/40 hover:bg-slate-100 dark:hover:bg-slate-950 flex flex-col items-center justify-center min-h-[160px]"
-                  >
-                    {isUploading ? (
-                      <div className="space-y-2">
-                        <div className="w-8 h-8 rounded-full border-2 border-brand-royal border-t-transparent animate-spin mx-auto" />
-                        <span className="text-xs text-slate-700 dark:text-slate-400 block font-semibold">
-                          Uploading document to Cloudflare R2...
-                        </span>
-                      </div>
-                    ) : uploadSuccess ? (
-                      <div className="space-y-2 text-emerald-600 dark:text-emerald-400">
-                        <Check className="w-8 h-8 mx-auto" />
-                        <span className="text-xs font-bold block">
-                          {uploadedFileName} ready
-                        </span>
-                        <span className="text-[10px] text-slate-600 dark:text-slate-500 block">
-                          Click Submit Assignment below to finalize.
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 text-slate-600 dark:text-slate-500">
-                        <Upload className="w-8 h-8 mx-auto text-brand-violet dark:text-brand-violet-light" />
-                        <span className="text-xs text-slate-800 dark:text-slate-300 font-bold block">
-                          Select or Drop files here
-                        </span>
-                        <span className="text-[10px] block">
-                          PDF, DOCX formats supported (Max 15MB)
-                        </span>
-                      </div>
-                    )}
+                activeAssign.rawDeadline && new Date() > new Date(activeAssign.rawDeadline) ? (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-semibold text-center w-full flex items-center justify-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>The deadline for this assignment has passed. Submissions are closed.</span>
                   </div>
+                ) : (
+                  <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <h4 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">
+                      File Submission
+                    </h4>
 
-                  <button
-                    type="submit"
-                    disabled={!uploadedFileName}
-                    className="w-full premium-btn-primary py-3.5 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span>Submit Assignment for Grading</span>
-                    <Check className="w-4 h-4" />
-                  </button>
-                </form>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.zip,.jpg,.jpeg,.png,.webp"
+                    />
+
+                    {/* Upload Box */}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-300 dark:border-white/10 hover:border-brand-royal/40 rounded-none p-6 text-center cursor-pointer transition-all bg-slate-50 dark:bg-slate-950/40 hover:bg-slate-100 dark:hover:bg-slate-950 flex flex-col items-center justify-center min-h-[160px]"
+                    >
+                      {isUploading ? (
+                        <div className="space-y-2">
+                          <div className="w-8 h-8 rounded-full border-2 border-brand-royal border-t-transparent animate-spin mx-auto" />
+                          <span className="text-xs text-slate-700 dark:text-slate-400 block font-semibold">
+                            Uploading document...
+                          </span>
+                        </div>
+                      ) : uploadError ? (
+                        <div className="space-y-2 text-red-500">
+                          <AlertCircle className="w-8 h-8 mx-auto" />
+                          <span className="text-xs font-bold block">
+                            {uploadError}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            Click to select a different file.
+                          </span>
+                        </div>
+                      ) : uploadedFileName ? (
+                        <div className="space-y-2 text-emerald-600 dark:text-emerald-400">
+                          <Check className="w-8 h-8 mx-auto" />
+                          <span className="text-xs font-bold block">
+                            {uploadedFileName} selected
+                          </span>
+                          <span className="text-[10px] text-slate-605 dark:text-slate-500 block">
+                            Click Submit Assignment below to finalize.
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 text-slate-600 dark:text-slate-500">
+                          <Upload className="w-8 h-8 mx-auto text-brand-violet dark:text-brand-violet-light" />
+                          <span className="text-xs text-slate-800 dark:text-slate-300 font-bold block">
+                            Select or Drop files here
+                          </span>
+                          <span className="text-[10px] block">
+                            PDF, DOC, DOCX, ZIP, Images supported (Max 5MB)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!uploadedFileName || isUploading}
+                      className="w-full premium-btn-primary py-3.5 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>Submit Assignment for Grading</span>
+                      <Check className="w-4 h-4" />
+                    </button>
+                  </form>
+                )
               ) : (
                 <div className="p-4 rounded-none bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 space-y-2 text-xs">
                   <span className="text-[9px] text-slate-600 dark:text-slate-500 font-bold uppercase block">
@@ -261,6 +316,14 @@ export const AssignmentPage: React.FC = () => {
                 <p className="italic">"{activeAssign.feedback}"</p>
               </div>
             </div>
+
+            <button
+              onClick={() => setView("given-grades")}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/10"
+            >
+              <span>View given grades</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>
@@ -279,8 +342,7 @@ export const AssignmentPage: React.FC = () => {
           <div className="space-y-2.5">
             {classAssignments.length === 0 ? (
               <div className="text-center py-8 text-xs text-slate-500 dark:text-slate-500 font-semibold">
-                No homework logs available for Class{" "}
-                {profile.selectedClassId.replace("class-", "")}
+                No homework logs available for {activeClass?.title || "selected class"}
               </div>
             ) : (
               classAssignments.map((a) => {

@@ -28,7 +28,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { activeView, setView, profile } = useLmsStore();
+  const { activeView, setView, profile, logout } = useLmsStore();
 
   const studentLinks = [
     { id: "student-dash", label: "Student Portal", icon: LayoutDashboard },
@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const teacherLinks = [
     { id: "teacher-dash", label: "Teacher Dashboard", icon: LayoutDashboard },
     { id: "admin-upload", label: "Contents and assignments", icon: Upload },
-    { id: "quiz-builder", label: "Quiz Builder", icon: PenTool },
+    { id: "submissions", label: "Submissions", icon: FileText },
     { id: "webrtc-live", label: "Start live session", icon: Tv },
   ];
 
@@ -118,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   <button
                     key={link.id}
                     onClick={() => handleLinkClick(link.id)}
-                    className={`w-full py-2.5 px-3 rounded-xl text-sm transition-all flex items-center gap-3 font-medium border ${
+                    className={`w-full py-2.5 px-3 rounded-xl text-sm transition-all flex items-center gap-3 font-medium border text-left ${
                       isActive
                         ? "bg-brand-royal/10 border-brand-royal/20 text-brand-royal dark:text-white font-semibold shadow-lg shadow-brand-royal/5"
                         : "bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5"
@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     <IconComponent
                       className={`w-5 h-5 ${isActive ? "text-brand-royal" : ""}`}
                     />
-                    <span>{link.label}</span>
+                    <span className="text-left">{link.label}</span>
                   </button>
                 );
               })}
@@ -151,7 +151,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </span>
             </div>
             <button
-              onClick={() => handleLinkClick("landing")}
+              onClick={() => {
+                logout();
+                onClose();
+              }}
               className="mt-1 w-full py-2 rounded-none bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-900 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-xs font-semibold flex items-center justify-center gap-1.5"
             >
               <LogOut className="w-3.5 h-3.5" />

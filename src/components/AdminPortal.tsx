@@ -37,7 +37,21 @@ const getSubjectSolidColor = (color: string) => {
   return "bg-brand-royal";
 };
 
-const API = (import.meta.env.VITE_API_URL as string) || "http://localhost:3000/api";
+const PremiumEmptyState = ({ icon: Icon, title, description }: { icon: any, title: string, description: string }) => {
+  return (
+    <div className="flex flex-col items-center justify-center text-center p-8 h-full min-h-[320px] rounded-2xl border-2 border-dashed border-slate-200/80 dark:border-white/5 bg-slate-50/20 dark:bg-slate-950/10">
+      <div className="mb-4 flex items-center justify-center">
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-brand-royal dark:text-brand-royal-300">
+          <Icon className="w-6 h-6" />
+        </div>
+      </div>
+      <h5 className="text-xs font-bold text-slate-800 dark:text-slate-300 tracking-wider uppercase">{title}</h5>
+      <p className="text-[11px] text-slate-500 max-w-[220px] mt-1.5 leading-relaxed">{description}</p>
+    </div>
+  );
+};
+
+const API = (import.meta.env.VITE_API_URL as string) || (typeof window !== "undefined" ? `${window.location.origin}/api` : "http://localhost:3000/api");
 const authHeaders = () => {
   const token = localStorage.getItem("auth_token") || "";
   return { Authorization: `Bearer ${token}` };
@@ -215,7 +229,7 @@ export const AdminPortal: React.FC = () => {
   const [editDeadlineVal, setEditDeadlineVal] = useState("");
 
   const activeBoard = boards.find((b) => b.id === selectedBoardId) || boards[0];
-  const activeClass = activeBoard?.classes.find((c) => c.id === selectedClassId) || activeBoard?.classes[0];
+  const activeClass = activeBoard?.classes?.find((c) => c.id === selectedClassId) || activeBoard?.classes?.[0];
 
   // ── fetch upload structure ─────────────────────────────────────────────────
   useEffect(() => {
@@ -269,8 +283,8 @@ export const AdminPortal: React.FC = () => {
 
   // ── helper: get class/subject name for R2 key ─────────────────────────────
   const upBoard = uploadBoards.find((b) => b.id === upBoardId);
-  const upClass = upBoard?.classes.find((c) => c.id === upClassId);
-  const upSubject = upClass?.subjects.find((s) => s.id === upSubjectId);
+  const upClass = upBoard?.classes?.find((c) => c.id === upClassId);
+  const upSubject = upClass?.subjects?.find((s) => s.id === upSubjectId);
 
   // ── structure handlers ────────────────────────────────────────────────────
   const handleAddBoard = (e: React.FormEvent) => {
@@ -430,6 +444,14 @@ export const AdminPortal: React.FC = () => {
     }
     return allViews.filter((v) => v.key !== "admin-upload");
   }, [profile?.role]);
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 font-sans text-left">
@@ -612,10 +634,12 @@ export const AdminPortal: React.FC = () => {
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${uploadTab === "assignments" ? "bg-brand-royal text-white border-brand-royal shadow-md" : "bg-white dark:bg-slate-950 text-slate-600 border-slate-300 dark:border-white/10 hover:border-brand-royal/40"}`}>
               <FileText className="w-3.5 h-3.5" /> Assignments
             </button>
-            <button onClick={() => setUploadTab("videos")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${uploadTab === "videos" ? "bg-brand-royal text-white border-brand-royal shadow-md" : "bg-white dark:bg-slate-950 text-slate-600 border-slate-300 dark:border-white/10 hover:border-brand-royal/40"}`}>
-              <Video className="w-3.5 h-3.5" /> Video Lectures
-            </button>
+            {profile?.role !== "teacher" && (
+              <button onClick={() => setUploadTab("videos")}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${uploadTab === "videos" ? "bg-brand-royal text-white border-brand-royal shadow-md" : "bg-white dark:bg-slate-950 text-slate-600 border-slate-300 dark:border-white/10 hover:border-brand-royal/40"}`}>
+                <Video className="w-3.5 h-3.5" /> Video Lectures
+              </button>
+            )}
           </div>
 
           {/* ── Notes Tab ──────────────────────────────────────────────────── */}
@@ -629,10 +653,10 @@ export const AdminPortal: React.FC = () => {
                 <form onSubmit={handleUploadNote} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Note Title</label>
-                    <input type="text" placeholder="e.g. Chapter 1 Summary" value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} className="premium-input text-xs" required />
+                    <input type="text" placeholder="Enter the note title" value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} className="premium-input text-xs" required />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">PDF / File</label>
+                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">PDF</label>
                     <div
                       onClick={() => noteFileRef.current?.click()}
                       className="w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-brand-royal/50 transition-colors group">
@@ -640,15 +664,30 @@ export const AdminPortal: React.FC = () => {
                       {noteFile ? (
                         <p className="text-xs font-semibold text-brand-royal">{noteFile.name}</p>
                       ) : (
-                        <p className="text-xs text-slate-500">Click to select PDF, image, or ZIP</p>
+                        <p className="text-xs text-slate-500">Click to select PDF</p>
                       )}
-                      <input ref={noteFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.zip" className="hidden" onChange={(e) => setNoteFile(e.target.files?.[0] || null)} />
+                      <input ref={noteFileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        if (file) {
+                          if (!file.name.toLowerCase().endsWith('.pdf')) {
+                            showStatus("error", "Only PDF files are allowed.");
+                            e.target.value = "";
+                            setNoteFile(null);
+                          } else if (file.size > 5 * 1024 * 1024) {
+                            showStatus("error", "File size exceeds 5MB limit. Please upload a smaller file.");
+                            e.target.value = "";
+                            setNoteFile(null);
+                          } else {
+                            setNoteFile(file);
+                          }
+                        }
+                      }} />
                     </div>
                   </div>
                   <button type="submit" disabled={uploading || !noteFile || !noteTitle || !upSubjectId}
                     className="w-full premium-btn-primary py-2.5 text-xs disabled:opacity-50">
                     {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    <span>{uploading ? "Uploading to R2…" : "Upload to Cloudflare R2"}</span>
+                    <span>{uploading ? "Uploading…" : "Upload"}</span>
                   </button>
                 </form>
               </div>
@@ -659,10 +698,11 @@ export const AdminPortal: React.FC = () => {
                   <BookOpen className="w-4 h-4 text-emerald-500" /> Uploaded Notes ({notes.length})
                 </h4>
                 {notes.length === 0 ? (
-                  <div className="text-center py-10">
-                    <BookOpen className="w-8 h-8 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
-                    <p className="text-xs text-slate-500">No notes uploaded for this subject yet.</p>
-                  </div>
+                  <PremiumEmptyState
+                    icon={BookOpen}
+                    title="No notes uploaded"
+                    description="Upload PDFs, reference materials, or lesson notes to get started."
+                  />
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                     {notes.map((n) => (
@@ -704,19 +744,28 @@ export const AdminPortal: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase flex items-center gap-1"><Calendar className="w-3 h-3" /> Deadline</label>
-                      <input type="datetime-local" value={assignDeadline} onChange={(e) => setAssignDeadline(e.target.value)} className="premium-input text-xs" required />
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase flex items-center gap-1 h-4"><Calendar className="w-3 h-3" /> Deadline</label>
+                      <input type="datetime-local" value={assignDeadline} onChange={(e) => setAssignDeadline(e.target.value)} className="premium-input text-xs h-11 py-2" required />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Max Marks</label>
-                      <input type="number" min="1" value={assignMaxMarks} onChange={(e) => setAssignMaxMarks(e.target.value)} className="premium-input text-xs" />
+                      <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase flex items-center h-4">Max Marks</label>
+                      <input type="number" min="1" value={assignMaxMarks} onChange={(e) => setAssignMaxMarks(e.target.value)} className="premium-input text-xs h-11 py-2" />
                     </div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase">Attachment (optional)</label>
                     <div onClick={() => assignFileRef.current?.click()} className="w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-4 text-center cursor-pointer hover:border-brand-royal/50 transition-colors">
                       {assignFile ? <p className="text-xs font-semibold text-brand-royal">{assignFile.name}</p> : <p className="text-xs text-slate-500">Click to attach a file</p>}
-                      <input ref={assignFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.zip" className="hidden" onChange={(e) => setAssignFile(e.target.files?.[0] || null)} />
+                      <input ref={assignFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.zip" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        if (file && file.size > 5 * 1024 * 1024) {
+                          showStatus("error", "File size exceeds 5MB limit. Please upload a smaller file.");
+                          e.target.value = "";
+                          setAssignFile(null);
+                        } else {
+                          setAssignFile(file);
+                        }
+                      }} />
                     </div>
                   </div>
                   <button type="submit" disabled={uploading || !assignTitle || !assignDeadline || !upSubjectId} className="w-full premium-btn-primary py-2.5 text-xs disabled:opacity-50">
@@ -732,10 +781,11 @@ export const AdminPortal: React.FC = () => {
                   <FileText className="w-4 h-4 text-amber-500" /> Assignments ({assignments.length})
                 </h4>
                 {assignments.length === 0 ? (
-                  <div className="text-center py-10">
-                    <FileText className="w-8 h-8 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
-                    <p className="text-xs text-slate-500">No assignments for this subject yet.</p>
-                  </div>
+                  <PremiumEmptyState
+                    icon={FileText}
+                    title="No assignments"
+                    description="Publish problems, tasks, or evaluations for students to submit."
+                  />
                 ) : (
                   <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
                     {assignments.map((a) => {
@@ -782,8 +832,8 @@ export const AdminPortal: React.FC = () => {
             </div>
           )}
 
-          {/* ── Videos Tab ─────────────────────────────────────────────────── */}
-          {uploadTab === "videos" && (
+          {/* ── Videos Tab — hidden for teachers ─────────────────────────── */}
+          {uploadTab === "videos" && profile?.role !== "teacher" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Upload Video Form */}
               <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4">
@@ -810,13 +860,22 @@ export const AdminPortal: React.FC = () => {
                       ) : (
                         <p className="text-xs text-slate-500">Click to select MP4, WebM, or MOV video</p>
                       )}
-                      <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" className="hidden" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+                      <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        if (file && file.size > 5 * 1024 * 1024) {
+                          showStatus("error", "File size exceeds 5MB limit. Please upload a smaller file.");
+                          e.target.value = "";
+                          setVideoFile(null);
+                        } else {
+                          setVideoFile(file);
+                        }
+                      }} />
                     </div>
                   </div>
                   <button type="submit" disabled={uploading || !videoFile || !videoTitle || !upSubjectId}
                     className="w-full premium-btn-primary py-2.5 text-xs disabled:opacity-50">
                     {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    <span>{uploading ? "Uploading Video to R2…" : "Upload Video to Cloudflare R2"}</span>
+                    <span>{uploading ? "Uploading Video…" : "Upload Video"}</span>
                   </button>
                 </form>
               </div>
@@ -827,10 +886,11 @@ export const AdminPortal: React.FC = () => {
                   <Video className="w-4 h-4 text-emerald-500" /> Uploaded Video Lectures ({videos.length})
                 </h4>
                 {videos.length === 0 ? (
-                  <div className="text-center py-10">
-                    <Video className="w-8 h-8 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
-                    <p className="text-xs text-slate-500">No video lectures uploaded for this subject yet.</p>
-                  </div>
+                  <PremiumEmptyState
+                    icon={Video}
+                    title="No video lectures"
+                    description="Upload video classes, recording playbacks, or screen captures."
+                  />
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                     {videos.map((v) => (

@@ -142,16 +142,21 @@ export interface Assignment {
   subjectId: string;
   subjectTitle: string;
   deadline: string;
+  rawDeadline?: string;
+  className?: string;
+  submittedAt?: string;
   points: number;
   status: AssignmentStatus;
   submissionFile?: string;
   grade?: string;
   feedback?: string;
+  studentName?: string;
+  teacherName?: string;
 }
 
 export interface AuthState {
   isAuthenticated: boolean;
-  user: null;
+  user: Profile | null;
   token: string | null;
   loading: boolean;
   error: string | null;
@@ -182,12 +187,13 @@ export interface LMSStore {
   profile: Profile;
   boards: Board[];
   assignments: Assignment[];
-  submitAssignment: (assignmentId: string, submissionFile: string) => void;
+  submitAssignment: (assignmentId: string, file: File) => Promise<void>;
   gradeAssignment: (
     assignmentId: string,
     grade: string,
     feedback: string,
-  ) => void;
+  ) => Promise<void>;
+  fetchAssignments: () => Promise<void>;
 
   quizzes: Quiz[];
   activeQuizId: string | null;
@@ -201,7 +207,8 @@ export interface LMSStore {
     message: string,
     type: NotificationType,
   ) => void;
-  readAllNotifications: () => void;
+  readAllNotifications: () => Promise<void>;
+  fetchNotifications: () => Promise<void>;
 
   bookmarks: Bookmark[];
   addBookmark: (

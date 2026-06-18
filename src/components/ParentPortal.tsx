@@ -26,7 +26,15 @@ export const ParentPortal: React.FC = () => {
 
   // Student active details
   const activeBoard = boards.find((b) => b.id === profile.selectedBoardId) || boards[0];
-  const activeClass = activeBoard?.classes.find((c) => c.id === profile.selectedClassId) || activeBoard?.classes[0];
+  const activeClass = activeBoard?.classes?.find((c) => c.id === profile.selectedClassId) || activeBoard?.classes?.[0];
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
 
   const handleSendFeedback = (e: React.FormEvent) => {
     e.preventDefault();

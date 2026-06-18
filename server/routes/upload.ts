@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { uploadToR2, buildStorageKey, deleteFromR2 } from '../lib/r2.js';
+import { requireAuth, requireAdmin, requireAdminOrTeacher } from '../middleware/auth.js';
+import { uploadToMinio, buildStorageKey, deleteFromMinio } from '../lib/minio.js';
 import { prisma } from '../lib/prisma.js';
 
 const router = Router();
@@ -9,7 +9,7 @@ const router = Router();
 // Use memory storage so we can pipe directly to R2
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB max
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/pdf',
@@ -59,7 +59,7 @@ router.get('/upload/structure', requireAuth, async (_req, res) => {
 router.post(
   '/upload/note',
   requireAuth,
-  requireAdmin,
+  requireAdminOrTeacher,
   upload.single('file'),
   async (req, res) => {
     try {
@@ -93,10 +93,10 @@ router.post(
 
       let fileUrl: string;
       try {
-        fileUrl = await uploadToR2(key, req.file.buffer, req.file.mimetype);
-      } catch (r2Err) {
-        // Fallback: store as local reference when R2 is not yet configured
-        console.warn('R2 upload failed (credentials may not be set), using local path:', r2Err);
+        fileUrl = await uploadToMinio(key, req.file.buffer, req.file.mimetype);
+      } catch (minioErr) {
+        // Fallback: store as local reference when MinIO is not yet configured
+        console.warn('MinIO upload failed (credentials may not be set), using local path:', minioErr);
         fileUrl = `/uploads/${key}`;
       }
 
@@ -110,6 +110,42 @@ router.post(
           isRequiredForComplete: false,
         },
       });
+
+      // Send database notifications to corresponding class students
+      try {
+        const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
+        const uploadingUser = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+        const professorName = uploadingUser ? `${uploadingUser.firstName} ${uploadingUser.lastName}` : 'Professor';
+
+        if (subject?.classId) {
+          const students = await prisma.student.findMany({ where: { classId: subject.classId } });
+          if (students.length > 0) {
+            const dbNotif = await prisma.notification.create({
+              data: {
+                title: 'New Study Material Uploaded',
+                body: `Professor ${professorName} uploaded new notes: "${title}" for ${subject.name}.`,
+                type: 'ACADEMIC',
+                data: {
+                  subjectId,
+                  noteId: note.id,
+                  fileUrl,
+                },
+              },
+            });
+
+            await prisma.userNotification.createMany({
+              data: students.map((s) => ({
+                userId: s.id,
+                notificationId: dbNotif.id,
+                isRead: false,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn('Failed to dispatch notes upload notification:', notifErr);
+      }
 
       res.status(201).json({
         success: true,
@@ -129,7 +165,7 @@ router.post(
 router.post(
   '/upload/assignment',
   requireAuth,
-  requireAdmin,
+  requireAdminOrTeacher,
   upload.single('file'),
   async (req, res) => {
     try {
@@ -178,9 +214,9 @@ router.post(
         );
 
         try {
-          fileUrl = await uploadToR2(key, req.file.buffer, req.file.mimetype);
-        } catch (r2Err) {
-          console.warn('R2 upload failed, using local path:', r2Err);
+          fileUrl = await uploadToMinio(key, req.file.buffer, req.file.mimetype);
+        } catch (minioErr) {
+          console.warn('MinIO upload failed, using local path:', minioErr);
           fileUrl = `/uploads/${key}`;
         }
       }
@@ -196,6 +232,42 @@ router.post(
           deadline: new Date(deadline),
         },
       });
+
+      // Send database notifications to corresponding class students
+      try {
+        const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
+        const uploadingUser = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+        const professorName = uploadingUser ? `${uploadingUser.firstName} ${uploadingUser.lastName}` : 'Professor';
+
+        if (subject?.classId) {
+          const students = await prisma.student.findMany({ where: { classId: subject.classId } });
+          if (students.length > 0) {
+            const dbNotif = await prisma.notification.create({
+              data: {
+                title: 'New Assignment Assigned',
+                body: `Professor ${professorName} posted a new assignment: "${title}" for ${subject.name}. Due: ${new Date(deadline).toLocaleDateString('en-IN')}.`,
+                type: 'ACADEMIC',
+                data: {
+                  subjectId,
+                  assignmentId: assignment.id,
+                  fileUrl: fileUrl || undefined,
+                },
+              },
+            });
+
+            await prisma.userNotification.createMany({
+              data: students.map((s) => ({
+                userId: s.id,
+                notificationId: dbNotif.id,
+                isRead: false,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn('Failed to dispatch assignment upload notification:', notifErr);
+      }
 
       res.status(201).json({
         success: true,
@@ -262,7 +334,7 @@ router.get('/upload/assignments', requireAuth, async (req, res) => {
 //  PATCH /upload/assignment/:id/deadline
 //  Admin updates the deadline (also controls locking)
 // ─────────────────────────────────────────────
-router.patch('/upload/assignment/:id/deadline', requireAuth, requireAdmin, async (req, res) => {
+router.patch('/upload/assignment/:id/deadline', requireAuth, requireAdminOrTeacher, async (req, res) => {
   const { id } = req.params;
   const { deadline } = req.body as { deadline?: string };
   if (!deadline) return res.status(400).json({ error: 'deadline is required' });
@@ -283,7 +355,7 @@ router.patch('/upload/assignment/:id/deadline', requireAuth, requireAdmin, async
 // ─────────────────────────────────────────────
 //  DELETE /upload/assignment/:id
 // ─────────────────────────────────────────────
-router.delete('/upload/assignment/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/upload/assignment/:id', requireAuth, requireAdminOrTeacher, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.assignment.delete({ where: { id } });
@@ -296,7 +368,7 @@ router.delete('/upload/assignment/:id', requireAuth, requireAdmin, async (req, r
 // ─────────────────────────────────────────────
 //  DELETE /upload/note/:id
 // ─────────────────────────────────────────────
-router.delete('/upload/note/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/upload/note/:id', requireAuth, requireAdminOrTeacher, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.courseNote.delete({ where: { id } });
@@ -313,7 +385,7 @@ router.delete('/upload/note/:id', requireAuth, requireAdmin, async (req, res) =>
 router.post(
   '/upload/video',
   requireAuth,
-  requireAdmin,
+  requireAdminOrTeacher,
   upload.single('file'),
   async (req, res) => {
     try {
@@ -348,9 +420,9 @@ router.post(
 
       let fileUrl: string;
       try {
-        fileUrl = await uploadToR2(key, req.file.buffer, req.file.mimetype);
-      } catch (r2Err) {
-        console.warn('R2 video upload failed, using local path:', r2Err);
+        fileUrl = await uploadToMinio(key, req.file.buffer, req.file.mimetype);
+      } catch (minioErr) {
+        console.warn('MinIO video upload failed, using local path:', minioErr);
         fileUrl = `/uploads/${key}`;
       }
 
@@ -401,7 +473,7 @@ router.get('/upload/videos', requireAuth, async (req, res) => {
 // ─────────────────────────────────────────────
 //  DELETE /upload/video/:id
 // ─────────────────────────────────────────────
-router.delete('/upload/video/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/upload/video/:id', requireAuth, requireAdminOrTeacher, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.courseVideo.delete({ where: { id } });
@@ -409,6 +481,18 @@ router.delete('/upload/video/:id', requireAuth, requireAdmin, async (req, res) =
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete video' });
   }
+});
+
+router.use((err: any, req: any, res: any, next: any) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size exceeds the 5MB limit. Please upload a smaller file.' });
+    }
+    return res.status(400).json({ error: err.message });
+  } else if (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  next();
 });
 
 export default router;

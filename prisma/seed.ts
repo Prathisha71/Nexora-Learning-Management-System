@@ -605,12 +605,12 @@ async function main() {
       ],
     },
     {
-      questionText: 'If set A has n elements, how many subsets does its power set contain?',
+      questionText: 'For any square matrix A, which of the following is always a symmetric matrix?',
       options: [
-        { optionText: '2ⁿ', isCorrect: true },
-        { optionText: 'n²', isCorrect: false },
-        { optionText: '2n', isCorrect: false },
-        { optionText: 'n!', isCorrect: false },
+        { optionText: 'A + Aᵀ', isCorrect: true },
+        { optionText: 'A - Aᵀ', isCorrect: false },
+        { optionText: 'A * Aᵀ', isCorrect: false },
+        { optionText: 'Aᵀ', isCorrect: false },
       ],
     },
     {
@@ -664,18 +664,7 @@ async function main() {
     });
   }
 
-  // Assignments
-  await prisma.assignment.create({
-    data: {
-      title: 'Solving Systems of Linear Equations by Cramer\'s Rule',
-      description: 'Solve the systems of equations using Cramer\'s rule, Matrix inversion method, and Gaussian elimination. Show step-by-step calculations and submit a PDF file.',
-      fileUrl: '/cramer_proof.pdf',
-      topicId: topicMath2.id,
-      maxMarks: 100.0,
-      passingMarks: 40.0,
-      deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    },
-  });
+  // Assignments (No default assignments seeded to start with a clean homework space)
 
   // ==========================================
   // 8. SEED INITIAL PROGRESS

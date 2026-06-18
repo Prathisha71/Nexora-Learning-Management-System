@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLmsStore } from "../store/index";
+import { getApiBaseUrl } from "../utils/apiBase";
 import {
   Sparkles,
   Play,
@@ -16,35 +17,47 @@ export const StudentDashboard: React.FC = () => {
   const { setView, profile, boards, assignments, setActiveCourseContext, joinLiveRoom } =
     useLmsStore();
 
-  const [activeClasses, setActiveClasses] = useState<Array<{ roomName: string; teacherName: string; subjectTitle: string }>>([]);
-
-  useEffect(() => {
-    const fetchActive = async () => {
-      try {
-        const res = await fetch("http://localhost:3000/api/live-class/mock/active");
-        if (res.ok) {
-          const data = await res.json();
-          setActiveClasses(data.rooms || []);
-        }
-      } catch (err) {
-        console.warn("Failed fetching active live classes:", err);
-      }
-    };
-    fetchActive();
-    const interval = setInterval(fetchActive, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   const activeBoard =
     boards.find((b) => b.id === profile.selectedBoardId) || boards[0];
   const activeClass =
-    activeBoard.classes.find((c) => c.id === profile.selectedClassId) ||
-    activeBoard.classes[0];
+    activeBoard?.classes?.find((c) => c.id === profile.selectedClassId) ||
+    activeBoard?.classes?.[0];
 
-  const filteredActiveClasses = activeClasses.filter((cls: any) => {
-    if (!cls.className) return true;
-    return cls.className.toLowerCase() === activeClass?.title?.toLowerCase();
-  });
+  const [dbMeetings, setDbMeetings] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDbMeetings = async () => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) return;
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/live-classes`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.meetings) {
+            const filtered = data.meetings.filter(
+              (m: any) => m.classLevel.toLowerCase() === activeClass?.title?.toLowerCase()
+            );
+            setDbMeetings(filtered);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed fetching db live classes for student:", err);
+      }
+    };
+    fetchDbMeetings();
+    const interval = setInterval(fetchDbMeetings, 5000);
+    return () => clearInterval(interval);
+  }, [activeClass?.title]);
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
 
   const subjects = activeClass?.subjects || [];
   const classSubjectIds = subjects.map((s) => s.id);
@@ -261,45 +274,72 @@ export const StudentDashboard: React.FC = () => {
               Upcoming & Active Live Classes
             </h3>
             <div className="space-y-3">
-              {filteredActiveClasses.length === 0 ? (
+              {dbMeetings.length === 0 ? (
                 <div className="glass-card p-5 border-slate-200 dark:border-white/5 rounded-none">
                   <p className="text-xs text-slate-650 dark:text-slate-550 text-center py-4 rounded-none">
-                    No active live classes for {activeClass?.title || "your class"}. Wait for your teacher to go live.
+                    No active or scheduled live classes for {activeClass?.title || "your class"}. Wait for your teacher to go live.
                   </p>
                 </div>
               ) : (
-                filteredActiveClasses.map((cls) => (
-                  <div key={cls.roomName} className="glass-card p-5 border-slate-200 dark:border-white/5 flex flex-col justify-between hover:border-brand-royal/30 transition-all text-left bg-white dark:bg-slate-950/80 rounded-none relative overflow-hidden">
+                dbMeetings.map((cls) => (
+                  <div key={cls.id} className="glass-card p-5 border-slate-200 dark:border-white/5 flex flex-col justify-between hover:border-brand-royal/30 transition-all text-left bg-white dark:bg-slate-950/80 rounded-none relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-none animate-pulse" /> Live Now
-                        </span>
+                        {cls.status === "Live" ? (
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-none animate-pulse" /> Live Now
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-blue-500/10 text-blue-600 border border-blue-500/20 px-2 py-0.5 rounded-none font-extrabold uppercase tracking-wide flex items-center gap-1.5">
+                            Upcoming
+                          </span>
+                        )}
                         <span className="text-[10px] text-slate-500 dark:text-slate-500 font-bold tracking-wider">
                           CODE: <span className="font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded-none">{cls.roomName}</span>
                         </span>
                       </div>
                       <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mb-1">
-                        {cls.subjectTitle}
+                        {cls.title}
                       </h4>
                       <p className="text-xs text-slate-700 dark:text-slate-400">
-                        Teacher: <span className="font-semibold text-slate-850 dark:text-slate-305">{cls.teacherName}</span>
+                        Subject: <span className="font-semibold text-slate-800 dark:text-slate-300">{cls.subjectTitle}</span>
                       </p>
+                      <p className="text-xs text-slate-700 dark:text-slate-400 mt-0.5">
+                        Teacher: <span className="font-semibold text-slate-800 dark:text-slate-300">{cls.teacherName}</span>
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2 font-mono">
+                        Scheduled: {cls.date} • {cls.startTime} - {cls.endTime}
+                      </p>
+                      {cls.description && (
+                        <p className="text-xs text-slate-650 dark:text-slate-400 mt-2 italic border-l-2 border-slate-200 dark:border-slate-800 pl-2">
+                          "{cls.description}"
+                        </p>
+                      )}
                     </div>
-                    <button
-                      onClick={() => {
-                        joinLiveRoom({
-                          roomName: cls.roomName,
-                          participantName: profile.name,
-                          isTeacher: false
-                        });
-                        setView("webrtc-live");
-                      }}
-                      className="mt-4 w-full py-2 bg-brand-royal hover:bg-brand-royal/90 text-white rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <span>Join Live Meeting</span>
-                    </button>
+
+                    {cls.status === "Live" ? (
+                      <button
+                        onClick={() => {
+                          joinLiveRoom({
+                            roomName: cls.roomName,
+                            participantName: profile.name,
+                            isTeacher: false
+                          });
+                          setView("webrtc-live");
+                        }}
+                        className="mt-4 w-full py-2 bg-brand-royal hover:bg-brand-royal/90 text-white rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <span>Join Live Meeting</span>
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="mt-4 w-full py-2 bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-600 rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-200 dark:border-white/5"
+                      >
+                        <span>Starts soon</span>
+                      </button>
+                    )}
                   </div>
                 ))
               )}

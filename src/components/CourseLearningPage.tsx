@@ -121,6 +121,31 @@ export const CourseLearningPage: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration] = useState(1200); // 20 mins mock duration in seconds
   const [bookmarkText, setBookmarkText] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleFullscreen = () => {
+    if (!playerContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      playerContainerRef.current.requestFullscreen().catch((err) => {
+        console.error("Error attempting to enable fullscreen:", err);
+      });
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
 
 
@@ -135,8 +160,16 @@ export const CourseLearningPage: React.FC = () => {
   const activeBoard =
     boards.find((b) => b.id === profile.selectedBoardId) || boards[0];
   const activeClass =
-    activeBoard.classes.find((c) => c.id === profile.selectedClassId) ||
-    activeBoard.classes[0];
+    activeBoard?.classes?.find((c) => c.id === profile.selectedClassId) ||
+    activeBoard?.classes?.[0];
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
 
   const activeSubject =
     activeClass?.subjects.find((s) => s.id === activeSubjectId) ||
@@ -588,7 +621,11 @@ export const CourseLearningPage: React.FC = () => {
       {/* Left Column: Player & Tabs */}
       <div className="lg:col-span-2 space-y-6">
         {/* Custom Mock Video Player */}
-        <div className="relative aspect-[16/9] w-full rounded-2xl bg-black border border-white/10 shadow-2xl overflow-hidden group video-glow-container">
+        <div
+          ref={playerContainerRef}
+          className="relative aspect-[16/9] w-full rounded-2xl bg-black border border-white/10 shadow-2xl overflow-hidden group video-glow-container"
+          style={isFullscreen ? { aspectRatio: "auto", height: "100%", width: "100%" } : {}}
+        >
           {/* Simulated Video Stream */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div
@@ -598,12 +635,16 @@ export const CourseLearningPage: React.FC = () => {
               }}
             />
 
-            {/* Pulsing visual to mimic action video */}
-            <div className="w-20 h-20 rounded-full border-2 border-brand-royal/30 flex items-center justify-center relative z-10 animate-pulse-slow">
-              <span className="w-16 h-16 rounded-full bg-brand-royal/20 flex items-center justify-center text-brand-royal-300 font-bold text-xs">
-                {isPlaying ? "ACTIVE" : "READY"}
-              </span>
-            </div>
+            {/* Pulsing play button overlay when paused */}
+            {!isPlaying && (
+              <button
+                type="button"
+                onClick={() => setIsPlaying(true)}
+                className="w-20 h-20 rounded-full bg-black/60 hover:bg-black/85 border border-white/20 flex items-center justify-center relative z-10 hover:scale-110 active:scale-95 transition-all shadow-2xl shadow-black/50 group cursor-pointer animate-pulse-slow"
+              >
+                <Play className="w-8 h-8 text-white fill-white translate-x-0.5 transition-transform duration-300 group-hover:scale-110" />
+              </button>
+            )}
 
             {/* Context Watermark */}
             <div className="absolute top-4 left-4 text-[9px] text-white/20 select-none font-mono tracking-widest z-10">
@@ -648,9 +689,24 @@ export const CourseLearningPage: React.FC = () => {
                 </span>
               </div>
 
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-white/5">
-                {activeTopic?.title || "Chapter Topic"}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-white/5">
+                  {activeTopic?.title || "Chapter Topic"}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleToggleFullscreen}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-white transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="w-4.5 h-4.5" />
+                  ) : (
+                    <Maximize2 className="w-4.5 h-4.5" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

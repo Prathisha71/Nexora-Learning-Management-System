@@ -15,13 +15,20 @@ export function mapTopic(topic: {
   id: string;
   name: string;
   studentProgress?: Array<{ isCompleted: boolean }>;
+  notes?: Array<{ id: string; title: string; fileUrl: string }>;
+  videos?: Array<{ id: string; title: string; videoUrl: string; duration: number }>;
 }) {
+  const firstNote = topic.notes?.[0];
+  const firstVideo = topic.videos?.[0];
+
   return {
     id: topic.id,
     title: topic.name,
     content: `Study material for ${topic.name}.`,
-    duration: '15 mins',
+    duration: firstVideo ? `${Math.round(firstVideo.duration / 60)} mins` : '15 mins',
     isCompleted: topic.studentProgress?.[0]?.isCompleted ?? false,
+    pdfUrl: firstNote?.fileUrl || undefined,
+    videoUrl: firstVideo?.videoUrl || undefined,
   };
 }
 

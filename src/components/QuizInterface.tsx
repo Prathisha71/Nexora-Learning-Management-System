@@ -49,8 +49,8 @@ export const QuizInterface: React.FC = () => {
     if (profile.selectedClassId) {
       setSelectedClassId(profile.selectedClassId);
       const activeClass =
-        activeBoard?.classes.find((c) => c.id === profile.selectedClassId) ||
-        activeBoard?.classes[0];
+        activeBoard?.classes?.find((c) => c.id === profile.selectedClassId) ||
+        activeBoard?.classes?.[0];
       const classSubjects = activeClass?.subjects || [];
       if (
         classSubjects.length > 0 &&
@@ -249,8 +249,17 @@ export const QuizInterface: React.FC = () => {
 
   // Derive helper objects for the dashboard selectors
   const activeClass =
-    activeBoard?.classes.find((c) => c.id === selectedClassId) ||
-    activeBoard?.classes[0];
+    activeBoard?.classes?.find((c) => c.id === selectedClassId) ||
+    activeBoard?.classes?.[0];
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
+
   const subjects = activeClass?.subjects || [];
   const activeSubject =
     subjects.find((s) => s.id === selectedSubjectId) || subjects[0];

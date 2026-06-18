@@ -56,3 +56,13 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
   next();
 }
+
+export function requireAdminOrTeacher(req: Request, res: Response, next: NextFunction) {
+  if (!req.auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (req.auth.role !== 'ADMIN' && req.auth.role !== 'TEACHER') {
+    return res.status(403).json({ error: 'Forbidden: Admin or Teacher access required' });
+  }
+  next();
+}

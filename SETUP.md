@@ -42,12 +42,13 @@ VITE_API_URL="http://localhost:3000/api"
 # AI Tutor Integration
 GEMINI_API_KEY="your-gemini-api-key-here"
 
-# ─── Cloudflare R2 (S3-compatible) ───────────────────────────────────────────
-CF_R2_ACCOUNT_ID="your-cloudflare-account-id"
-CF_R2_ACCESS_KEY_ID="your-r2-access-key-id"
-CF_R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
-CF_R2_BUCKET_NAME="nexora-lms-uploads"
-CF_R2_PUBLIC_URL="https://pub-XXXX.r2.dev"
+# ─── MinIO (S3-compatible local object storage) ──────────────────────────────
+MINIO_ENDPOINT="localhost"
+MINIO_PORT=9000
+MINIO_ACCESS_KEY="minioadmin"
+MINIO_SECRET_KEY="minioadmin123"
+MINIO_BUCKET="lms-files"
+MINIO_USE_SSL=false
 
 # ─── Gmail SMTP ─────────────────────────────────────────────────────────────
 SMTP_USER="your-email@gmail.com"
@@ -92,20 +93,20 @@ The client will be running at `http://localhost:5173/` (or `http://localhost:517
 
 ---
 
-## 4. Cloudflare R2 Configuration
+## 4. MinIO Local Configuration
 
-Nexora LMS uses Cloudflare R2 as S3-compatible object storage to upload study notes, assignment attachments, and video lectures.
+Nexora LMS uses MinIO as S3-compatible local object storage to upload study notes, assignment attachments, and video lectures.
 
 ### Setup Instructions
-1. Log into your [Cloudflare Dashboard](https://dash.cloudflare.com) and go to **R2**.
-2. Click **Create Bucket**, name it (e.g. `nexora-lms-uploads`), and keep the default region as **Automatic**.
-3. Under bucket settings, enable **Public Access** or connect a custom domain to obtain your public URL. Fill this under `CF_R2_PUBLIC_URL`.
-4. Go to **Manage API Tokens** in R2 and click **Create API Token**.
-5. Assign permission level **Read & Write** to the token, and copy:
-   - Account ID (`CF_R2_ACCOUNT_ID`)
-   - Access Key ID (`CF_R2_ACCESS_KEY_ID`)
-   - Secret Access Key (`CF_R2_SECRET_ACCESS_KEY`)
-6. Place these credentials in your `.env` file.
+1. Ensure your MinIO server/Docker container is running on `localhost:9000` (API) and `localhost:9001` (Console).
+2. Open your browser and go to the Console: `http://localhost:9001`
+3. Log in using your credentials:
+   - **Username**: `minioadmin`
+   - **Password**: `minioadmin123`
+4. On the left sidebar, click **Buckets**.
+5. Click **Create Bucket**, name it `lms-files`, and click **Create**.
+6. Ensure bucket access policies permit reading files.
+7. Confirm your `.env` contains the required MinIO credentials.
 
 ---
 

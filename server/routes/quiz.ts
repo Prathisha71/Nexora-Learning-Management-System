@@ -209,18 +209,18 @@ function getQuestionsForTopic(subjectName: string, chapterName: string, topicNam
       correctAnswerIndex: 0,
     },
     {
-      question: "If set A has n elements, how many subsets does its power set contain?",
-      options: ["2ⁿ", "n²", "2n", "n!"],
+      question: "For any square matrix A, which of the following is always a symmetric matrix?",
+      options: ["A + Aᵀ", "A - Aᵀ", "Aᵀ", "A²"],
       correctAnswerIndex: 0,
     },
     {
-      question: "Which of the following describes the intersection A ∩ B = Ø?",
-      options: ["Disjoint sets", "Equal sets", "Subsets", "Universal sets"],
+      question: "If A is a square matrix of order n, then det(kA) is equal to:",
+      options: ["kⁿ det(A)", "k det(A)", "kⁿ⁺¹ det(A)", "nᵏ det(A)"],
       correctAnswerIndex: 0,
     },
     {
-      question: "What is the Cartesian product A × B for A={1,2} and B={3}?",
-      options: ["{(1,3), (2,3)}", "{(3,1), (3,2)}", "{1, 2, 3}", "{}"],
+      question: "If the determinant of a matrix A is equal to zero, then its inverse matrix:",
+      options: ["Does not exist", "Is equal to A", "Is the identity matrix", "Is equal to zero"],
       correctAnswerIndex: 0,
     },
     {

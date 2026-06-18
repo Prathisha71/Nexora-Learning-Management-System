@@ -11,6 +11,8 @@ const topicInclude = (studentId?: string) => ({
     studentProgress: studentId
       ? { where: { studentId }, take: 1 }
       : false,
+    notes: { orderBy: { sortOrder: 'asc' as const } },
+    videos: { orderBy: { sortOrder: 'asc' as const } },
   },
 });
 

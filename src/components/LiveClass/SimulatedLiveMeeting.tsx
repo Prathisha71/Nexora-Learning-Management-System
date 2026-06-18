@@ -4,6 +4,7 @@ import {
   MonitorUp, Shield, MicOff, PhoneOff, Focus, UserX, Send, X, Mic, Video as VideoIcon, VideoOff, Check
 } from "lucide-react";
 import { useLmsStore } from "../../store/index";
+import { getApiBaseUrl } from "../../utils/apiBase";
 
 interface MockParticipant {
   identity: string;
@@ -101,11 +102,15 @@ export const SimulatedLiveMeeting = ({
 
   // Initial join request
   useEffect(() => {
+    const token = localStorage.getItem("auth_token");
     const initJoin = async () => {
       try {
-        await fetch("http://localhost:3000/api/live-class/mock/join", {
+        const res = await fetch(`${getApiBaseUrl()}/api/live-class/mock/join`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
             roomName,
             participantName,
@@ -117,6 +122,12 @@ export const SimulatedLiveMeeting = ({
             className: (window as any)._activeTeacherClass || "Class 11"
           })
         });
+        if (res.status === 403) {
+          alert("Access denied: You are not enrolled in the class for this meeting.");
+          joinLiveRoom(null);
+          setView("student-dash");
+          return;
+        }
       } catch (err) {
         console.error("Mock join failed:", err);
       }
@@ -131,9 +142,12 @@ export const SimulatedLiveMeeting = ({
     return () => {
       clearInterval(interval);
       // Explicit leave
-      fetch("http://localhost:3000/api/live-class/mock/leave", {
+      fetch(`${getApiBaseUrl()}/api/live-class/mock/leave`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ roomName, identity })
       }).catch(console.error);
     };
@@ -141,6 +155,7 @@ export const SimulatedLiveMeeting = ({
 
   // Sync callback
   const syncRoom = async () => {
+    const token = localStorage.getItem("auth_token");
     try {
       const syncBody: any = {
         roomName,
@@ -163,11 +178,21 @@ export const SimulatedLiveMeeting = ({
         whiteboardLocalUpdatedRef.current = false;
       }
 
-      const res = await fetch("http://localhost:3000/api/live-class/mock/sync", {
+      const res = await fetch(`${getApiBaseUrl()}/api/live-class/mock/sync`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(syncBody)
       });
+
+      if (res.status === 403) {
+        alert("Access denied: You are not enrolled in the class for this meeting.");
+        joinLiveRoom(null);
+        setView("student-dash");
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -208,10 +233,14 @@ export const SimulatedLiveMeeting = ({
 
   // Host operations
   const sendHostCommand = async (command: string, targetIdentity?: string) => {
+    const token = localStorage.getItem("auth_token");
     try {
-      await fetch("http://localhost:3000/api/live-class/mock/host-command", {
+      await fetch(`${getApiBaseUrl()}/api/live-class/mock/host-command`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ roomName, command, targetIdentity })
       });
       syncRoom();

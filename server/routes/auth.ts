@@ -1,11 +1,24 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import nodemailer from 'nodemailer';
 import { prisma } from '../lib/prisma.js';
 import { mapUserProfile } from '../lib/mappers.js';
 import { signToken, requireAuth, requireAdmin } from '../middleware/auth.js';
+import { generateSecurePassword, sendCredentialsEmail, sendSubscriptionConfirmationEmail, sendOtpEmail } from '../lib/emailService.js';
 
 const router = Router();
+
+// In-memory store for OTPs (email -> { otp, expiresAt })
+const passwordResetStore = new Map<string, { otp: string; expiresAt: number }>();
+
+// Dev-only helper: return OTP for testing (only available when not in production)
+router.get('/debug/otp', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') return res.status(404).end();
+  const { email } = req.query as { email?: string };
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+  const record = passwordResetStore.get(email.toLowerCase());
+  if (!record) return res.status(404).json({ error: 'No OTP for this email' });
+  return res.json({ email: email.toLowerCase(), otp: record.otp, expiresAt: record.expiresAt });
+});
 
 async function loadUser(email: string) {
   return prisma.user.findUnique({
@@ -37,17 +50,26 @@ router.get('/check-email', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
+  if (password) {
+    const charCodes = Array.from(password).map(c => c.charCodeAt(0)).join(', ');
+    console.log(`[server] Login attempt: email="${email}", passwordLength=${password.length}, charCodes=[${charCodes}]`);
+  } else {
+    console.log(`[server] Login attempt: email="${email}", password=undefined`);
+  }
   if (!email || !password) {
+    console.warn(`[server] Login failed: Missing email or password in request body`);
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
   const user = await loadUser(email.toLowerCase());
   if (!user) {
+    console.warn(`[server] Login failed: User not found in database for email="${email}"`);
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
+    console.warn(`[server] Login failed: Password mismatch for email="${email}"`);
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
@@ -75,131 +97,144 @@ router.post('/signup', async (req, res) => {
     classId?: string;
   };
 
-  // Generate a random 8-character password for the registration
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let signupPassword = '';
-  for (let i = 0; i < 8; i++) {
-    signupPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-
-  if (!email || !signupPassword || !firstName || !lastName || !role) {
+  if (!email || !firstName || !lastName || !role) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (existing) {
-    return res.status(409).json({ error: 'Email already registered' });
-  }
-
-  const passwordHash = await bcrypt.hash(signupPassword, 10);
-  const userRole = role.toUpperCase() as 'STUDENT' | 'TEACHER' | 'ADMIN';
-
-  const user = await prisma.user.create({
-    data: {
-      email: email.toLowerCase(),
-      passwordHash,
-      firstName,
-      lastName,
-      role: userRole,
-      ...(userRole === 'STUDENT' && boardId && classId
-        ? {
-            studentProfile: {
-              create: {
-                boardId,
-                classId,
-                analytics: { create: { xp: 100 } },
-                learningStreak: { create: { currentStreak: 1, longestStreak: 1 } },
-              },
-            },
-          }
-        : {}),
-      ...(userRole === 'TEACHER'
-        ? {
-            teacherProfile: {
-              create: {
-                bio: 'Nexora Learning instructor',
-                qualification: 'Subject expert',
-              },
-            },
-          }
-        : {}),
-      ...(userRole === 'ADMIN'
-        ? {
-            adminProfile: {
-              create: { dept: 'Operations' },
-            },
-          }
-        : {}),
-    },
-    include: {
-      studentProfile: {
-        include: {
-          analytics: true,
-          learningStreak: true,
-        },
-      },
-    },
-  });
-
-  // Send credentials to Gmail via SMTP
   try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // use STARTTLS
-      auth: {
-        user: 'nexoralmslearning@gmail.com',
-        pass: 'zrgiibdlrvsahxwn', // Gmail App password
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (existing) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Generate a secure random password
+    const generatedPassword = generateSecurePassword();
+    const passwordHash = await bcrypt.hash(generatedPassword, 10);
+    const userRole = role.toUpperCase() as 'STUDENT' | 'TEACHER' | 'ADMIN';
+
+    const user = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        passwordHash,
+        firstName,
+        lastName,
+        role: userRole,
+        ...(userRole === 'STUDENT' && boardId && classId
+          ? {
+              studentProfile: {
+                create: {
+                  boardId,
+                  classId,
+                  analytics: { create: { xp: 100 } },
+                  learningStreak: { create: { currentStreak: 1, longestStreak: 1 } },
+                },
+              },
+            }
+          : {}),
+        ...(userRole === 'TEACHER'
+          ? {
+              teacherProfile: {
+                create: {
+                  bio: 'Nexora Learning instructor',
+                  qualification: 'Subject expert',
+                },
+              },
+            }
+          : {}),
+        ...(userRole === 'ADMIN'
+          ? {
+              adminProfile: {
+                create: { dept: 'Operations' },
+              },
+            }
+          : {}),
       },
-      tls: {
-        rejectUnauthorized: false,
+      include: {
+        studentProfile: {
+          include: {
+            analytics: true,
+            learningStreak: true,
+          },
+        },
       },
     });
 
-    const activationUrl = `http://localhost:5173/#/get-credentials?email=${encodeURIComponent(email.toLowerCase())}&password=${encodeURIComponent(signupPassword)}&role=${encodeURIComponent(userRole)}`;
-    const mailOptions = {
-      from: '"Nexora Learning" <nexoralmslearning@gmail.com>',
-      to: email.toLowerCase(),
-      subject: 'Activate Your Nexora Learning Portal Credentials',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 0px; background-color: #ffffff;">
-          <h2 style="color: #4f46e5; text-align: center; margin-bottom: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Nexora Learning</h2>
-          <p style="font-size: 14px; color: #334155; line-height: 1.6;">Hello ${firstName} ${lastName},</p>
-          <p style="font-size: 14px; color: #334155; line-height: 1.6;">Welcome! Your scholar account has been successfully registered.</p>
-          <p style="font-size: 14px; color: #334155; line-height: 1.6;">To retrieve your login email and temporary password, please activate your portal subscription. Click the button below to proceed to the secure activation page:</p>
-          
-          <div style="text-align: center; margin: 32px 0;">
-            <a href="${activationUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; text-decoration: none; font-size: 14px; font-weight: bold; border-radius: 0px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">Activate Portal & Get Credentials</a>
-          </div>
-          
-          <p style="font-size: 13px; color: #64748b; line-height: 1.6;">Note: For safety and privacy, portal credentials can only be accessed through an active subscription portal. Do not share your activation link with anyone.</p>
-          
-          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
-          <p style="font-size: 11px; color: #64748b; text-align: center; line-height: 1.5;">
-            This is an automated notification from Nexora Learning. Please do not reply to this email.
-          </p>
-        </div>
-      `,
-    };
+    // Send credentials email but DO NOT show password in response
+    await sendCredentialsEmail(email.toLowerCase(), firstName, lastName, generatedPassword, userRole);
 
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ SMTP credentials email sent successfully to ${email}`);
-  } catch (emailErr) {
-    console.error('❌ Failed to send credentials email via SMTP:', emailErr);
+    // Return only success message, NO password in response
+    return res.status(201).json({
+      success: true,
+      message: 'Account created successfully. Check your email for credentials.',
+      email: email.toLowerCase(),
+      role: userRole.toLowerCase(),
+    });
+  } catch (error: any) {
+    console.error('Signup error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create account' });
+  }
+});
+
+/**
+ * Subscription confirmation endpoint
+ * Called when user clicks "Subscribe" button on subscription page
+ * Sends credentials email and redirects to login
+ */
+router.post('/subscribe', async (req, res) => {
+  const { email, subscriptionPlan } = req.body as {
+    email?: string;
+    subscriptionPlan?: string;
+  };
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
   }
 
-  const token = signToken({ userId: user.id, role: user.role });
-  const profile = mapUserProfile({
-    ...user,
-    studentProfile: user.studentProfile,
-  });
+  try {
+    // Find the user by email
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
 
-  return res.status(201).json({ 
-    token, 
-    user: profile, 
-    role: user.role.toLowerCase(),
-    generatedPassword: signupPassword 
-  });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only generate a new password if the user does not have a password hash yet
+    let generatedPassword = "";
+    if (!user.passwordHash || user.passwordHash.length < 10) {
+      generatedPassword = generateSecurePassword();
+      const passwordHash = await bcrypt.hash(generatedPassword, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      });
+    } else {
+      generatedPassword = "Use the temporary password sent in your registration email.";
+    }
+
+    const emailSent = await sendSubscriptionConfirmationEmail(
+      email.toLowerCase(),
+      user.firstName,
+      user.lastName,
+      generatedPassword,
+      user.role,
+      subscriptionPlan || 'Full Academic Access Pass'
+    );
+
+    if (emailSent) {
+      return res.json({
+        success: true,
+        message: 'Subscription confirmed. Credentials sent to email.',
+        redirectTo: '/#/login',
+      });
+    } else {
+      return res.status(500).json({ error: 'Failed to send confirmation email' });
+    }
+  } catch (error: any) {
+    console.error('Subscription error:', error);
+    return res.status(500).json({ error: error.message || 'Subscription failed' });
+  }
 });
 
 // User Management CRUD for Admin Configurable Users
@@ -377,4 +412,55 @@ router.post('/logout', (_req, res) => {
 });
 
 export default router;
+
+// Forgot password: send OTP
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    passwordResetStore.set(email.toLowerCase(), { otp, expiresAt });
+
+    const sent = await sendOtpEmail(email.toLowerCase(), otp);
+    if (!sent) return res.status(500).json({ error: 'Failed to send OTP' });
+
+    return res.json({ success: true, message: 'OTP sent to email' });
+  } catch (err: any) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to process request' });
+  }
+});
+
+// Reset password: verify OTP and set new password
+router.post('/reset-password', async (req, res) => {
+  const { email, otp, newPassword } = req.body as { email?: string; otp?: string; newPassword?: string };
+  if (!email || !otp || !newPassword) return res.status(400).json({ error: 'Missing required fields' });
+
+  try {
+    const record = passwordResetStore.get(email.toLowerCase());
+    if (!record) return res.status(400).json({ error: 'No OTP requested for this email' });
+    if (record.expiresAt < Date.now()) {
+      passwordResetStore.delete(email.toLowerCase());
+      return res.status(400).json({ error: 'OTP expired' });
+    }
+    if (record.otp !== otp) return res.status(400).json({ error: 'Invalid OTP' });
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+    passwordResetStore.delete(email.toLowerCase());
+    return res.json({ success: true, message: 'Password reset successful' });
+  } catch (err: any) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to reset password' });
+  }
+});
 

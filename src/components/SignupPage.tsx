@@ -140,7 +140,15 @@ export const SignupPage: React.FC = () => {
 
   const activeBoard = boards.find((b) => b.id === boardId) || boards[0];
   const activeClass =
-    activeBoard.classes.find((c) => c.id === classId) || activeBoard.classes[0];
+    activeBoard?.classes?.find((c) => c.id === classId) || activeBoard?.classes?.[0];
+
+  if (!activeBoard || !activeClass) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-royal"></div>
+      </div>
+    );
+  }
   const subjects = activeClass?.subjects || [];
 
   const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,15 +264,12 @@ export const SignupPage: React.FC = () => {
         console.warn("LMS server signup failed or running in offline mock mode.", signupErr);
       }
 
-      const fallbackPass = 'Nx' + Math.floor(100000 + Math.random() * 900000); // 8 characters fallback
-      const finalPassword = serverResult?.generatedPassword || fallbackPass;
-
       const defaultOptedSubjectId = subjects[0]?.id || optedSubjectId;
       const newProfile = {
         id: serverResult?.user?.id || `student-${Date.now()}`,
         name: name.trim(),
         username: email.trim().toLowerCase().split("@")[0],
-        password: finalPassword,
+        password: "",
         email: email.trim().toLowerCase(),
         role: "student" as const,
         selectedBoardId: boardId,
@@ -290,15 +295,21 @@ export const SignupPage: React.FC = () => {
 
       saveRegisteredStudent(newProfile);
 
-      // Display the credentials modal
-      setRegisteredCredentials({
-        email: email.trim().toLowerCase(),
-        password: finalPassword,
-        role: role,
-        profile: newProfile,
-        token: serverResult?.token || null
-      });
-      setShowCredentialsModal(true);
+      // Store signup info temporarily for subscription flow
+      localStorage.setItem(
+        "pendingSubscription",
+        JSON.stringify({
+          email: email.trim().toLowerCase(),
+          firstName,
+          lastName,
+          role: role.toUpperCase(),
+          profile: newProfile,
+          signupTime: new Date().toISOString(),
+        })
+      );
+
+      // Redirect to subscription/credentials page
+      setView("get-credentials");
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "Registration failed. Please check network connection.");

@@ -13,6 +13,7 @@ import '@livekit/components-styles';
 import { ZoomMeetingLayout } from './ZoomMeetingLayout';
 import { useLmsStore } from '../../store/index';
 import { SimulatedLiveMeeting } from './SimulatedLiveMeeting';
+import { getApiBaseUrl } from '../../utils/apiBase';
 
 // Hardcoded for demo purposes. In production, securely distribute this key.
 const E2EE_SHARED_KEY = 'video-shield-super-secret-key-123';
@@ -84,13 +85,15 @@ export const RoomContainer = ({ roomName, participantName, isTeacher }: { roomNa
   const [token, setToken] = useState('');
   const [preJoinChoices, setPreJoinChoices] = useState<{ videoEnabled: boolean, audioEnabled: boolean, username?: string } | null>(null);
   const [isFetchingToken, setIsFetchingToken] = useState(false);
+  const [tokenError, setTokenError] = useState('');
   const [livekitAvailable, setLivekitAvailable] = useState<boolean | null>(null);
+  const storeToken = useLmsStore((state) => state.auth.token);
 
   // Check if real LiveKit server is active
   useEffect(() => {
     const checkServer = async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/live-class/status");
+        const res = await fetch(`${getApiBaseUrl()}/api/live-class/status`);
         if (res.ok) {
           const data = await res.json();
           setLivekitAvailable(data.livekitAvailable);
@@ -122,17 +125,32 @@ export const RoomContainer = ({ roomName, participantName, isTeacher }: { roomNa
   const handlePreJoinSubmit = async (values: any) => {
     console.log("Joining with: ", values);
     setIsFetchingToken(true);
+    setTokenError('');
     // Use the username typed in PreJoin, otherwise fallback to the prop
     const finalName = values.username || participantName;
     try {
       const resp = await fetch(
-        `http://localhost:3000/api/live-class/token?room=${roomName}&participant=${encodeURIComponent(finalName)}&isTeacher=${isTeacher}`
+        `${getApiBaseUrl()}/api/live-class/token?room=${roomName}&participant=${encodeURIComponent(finalName)}&isTeacher=${isTeacher}`,
+        {
+          headers: {
+            ...(storeToken ? { Authorization: `Bearer ${storeToken}` } : {})
+          }
+        }
       );
+      if (resp.status === 403) {
+        setTokenError("Access denied: You are not enrolled in the class for this meeting.");
+        return;
+      }
+      if (!resp.ok) {
+        setTokenError("Could not retrieve meeting token. Please try again later.");
+        return;
+      }
       const data = await resp.json();
       setToken(data.token);
       setPreJoinChoices(values);
     } catch (e) {
       console.error(e);
+      setTokenError("Connection error: Could not reach token generation endpoint.");
     } finally {
       setIsFetchingToken(false);
     }
@@ -154,6 +172,11 @@ export const RoomContainer = ({ roomName, participantName, isTeacher }: { roomNa
       <div className="h-screen w-full bg-[#0a0a0a] flex items-center justify-center" data-lk-theme="default">
         <div className="max-w-md w-full bg-slate-900 rounded-xl p-6 shadow-2xl border border-slate-800">
           <h2 className="text-2xl font-bold text-white mb-6 text-center">Join Live Class</h2>
+          {tokenError && (
+            <div className="mb-4 p-3 bg-red-950/50 border border-red-500/30 text-red-200 text-xs rounded font-medium text-center">
+              ⚠️ {tokenError}
+            </div>
+          )}
           <PreJoin
             defaults={{
               videoEnabled: isTeacher,
@@ -182,7 +205,7 @@ export const RoomContainer = ({ roomName, participantName, isTeacher }: { roomNa
       video={preJoinChoices.videoEnabled}
       audio={preJoinChoices.audioEnabled}
       token={token}
-      serverUrl="ws://localhost:7880"
+      serverUrl={import.meta.env.VITE_LIVEKIT_URL || "ws://localhost:7880"}
       connect={true}
       data-lk-theme="default"
       onDisconnected={() => {

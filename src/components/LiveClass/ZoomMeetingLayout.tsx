@@ -17,6 +17,7 @@ import {
   MonitorUp, Shield, MoreVertical, MicOff, PhoneOff, Focus, UserX
 } from 'lucide-react';
 import { useLmsStore } from '../../store/index';
+import { getApiBaseUrl } from '../../utils/apiBase';
 import { CollaborativeWhiteboard } from './CollaborativeWhiteboard';
 import { MeetingChat } from './MeetingChat';
 
@@ -39,7 +40,7 @@ export const ZoomMeetingLayout = () => {
     if (!confirm("Are you sure you want to kick this participant?")) return;
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch('http://localhost:3000/api/live-class/kick-participant', {
+      const res = await fetch(`${getApiBaseUrl()}/api/live-class/kick-participant`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -144,9 +145,13 @@ export const ZoomMeetingLayout = () => {
 
   const approveScreenShare = async (identity: string) => {
     try {
-      const res = await fetch('http://localhost:3000/api/live-class/grant-publish', {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${getApiBaseUrl()}/api/live-class/grant-publish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ room: room.name, identity })
       });
       if (res.ok) {

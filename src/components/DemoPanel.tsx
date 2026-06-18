@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLmsStore } from "../store/index";
 import { authAPI, academicAPI } from "../services/api";
 import {
@@ -20,6 +20,89 @@ export const DemoPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { setView, addNotification, isDarkMode, toggleDarkMode, boards, profile } = useLmsStore();
   const [loadingRole, setLoadingRole] = useState<string | null>(null);
+
+  // Dragging states
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // Don't drag if clicking interactive elements inside, except the header or toggle button itself
+    if (target.closest("button") && target.closest("button") !== e.currentTarget) {
+      return;
+    }
+    if (target.closest("select") || target.closest("option") || target.closest("input") || target.closest("textarea")) {
+      return;
+    }
+    isDragging.current = true;
+    hasMoved.current = false;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    dragOffset.current = { x: position.x, y: position.y };
+    e.preventDefault();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button") && target.closest("button") !== e.currentTarget) {
+      return;
+    }
+    if (target.closest("select") || target.closest("option") || target.closest("input") || target.closest("textarea")) {
+      return;
+    }
+    const touch = e.touches[0];
+    isDragging.current = true;
+    hasMoved.current = false;
+    dragStart.current = { x: touch.clientX, y: touch.clientY };
+    dragOffset.current = { x: position.x, y: position.y };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        hasMoved.current = true;
+      }
+      setPosition({
+        x: dragOffset.current.x + dx,
+        y: dragOffset.current.y + dy,
+      });
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging.current) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - dragStart.current.x;
+      const dy = touch.clientY - dragStart.current.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        hasMoved.current = true;
+      }
+      setPosition({
+        x: dragOffset.current.x + dx,
+        y: dragOffset.current.y + dy,
+      });
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleMouseUp);
+    };
+  }, []);
 
   const handleSimulateRole = async (role: "student" | "teacher" | "admin") => {
     setLoadingRole(role);
@@ -131,12 +214,19 @@ export const DemoPanel: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] font-sans text-left">
+    <div 
+      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+      className="fixed bottom-6 right-6 z-[9999] font-sans text-left"
+    >
       {/* Overlay Panel */}
       {isOpen && (
         <div className="bg-[#0b0f19] border border-slate-800/80 shadow-2xl p-5 w-72 mb-3 rounded-2xl animate-fade-in-up backdrop-blur-md text-slate-200">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800/60 mb-4">
+          <div 
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+            className="flex items-center justify-between pb-3 border-b border-slate-800/60 mb-4 cursor-move select-none"
+          >
             <div className="flex items-center gap-1.5 text-brand-violet font-bold text-xs uppercase tracking-wider font-mono">
               <span>{`>_`}</span>
               <span>Eduverse Demo Panel</span>
@@ -278,15 +368,24 @@ export const DemoPanel: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  setView("login");
+                  setView("login-student");
                   setIsOpen(false);
                 }}
                 className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-900/30 hover:bg-slate-900/70 border border-slate-850 rounded-lg text-slate-300 text-xs transition-all text-left"
               >
-                <span>2. Login Page</span>
+                <span>2a. Student Login Page</span>
                 <ExternalLink className="w-3 h-3 text-slate-500" />
               </button>
               <button
+                onClick={() => {
+                  setView("login-educator");
+                  setIsOpen(false);
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-900/30 hover:bg-slate-900/70 border border-slate-850 rounded-lg text-slate-300 text-xs transition-all text-left"
+              >
+                <span>2b. Educator Login Page</span>
+                <ExternalLink className="w-3 h-3 text-slate-500" />
+              </button>              <button
                 onClick={() => {
                   setView("signup");
                   setIsOpen(false);
@@ -317,8 +416,17 @@ export const DemoPanel: React.FC = () => {
 
       {/* Toggle Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-full shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all text-xs font-bold uppercase tracking-wider"
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        onClick={(e) => {
+          if (hasMoved.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          setIsOpen(!isOpen);
+        }}
+        className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-full shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all text-xs font-bold uppercase tracking-wider cursor-move select-none"
       >
         <Zap className="w-4 h-4 fill-white" />
         <span>Demo Controls</span>

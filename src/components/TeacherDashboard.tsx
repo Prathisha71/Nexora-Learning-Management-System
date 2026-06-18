@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLmsStore } from "../store/index";
+import { getApiBaseUrl } from "../utils/apiBase";
 import type { Assignment } from "../store/types";
 import {
   Users,
@@ -19,52 +20,47 @@ import {
 export const TeacherDashboard: React.FC = () => {
   const { assignments, gradeAssignment, setView, boards, profile } = useLmsStore();
   const [gradingAssignId, setGradingAssignId] = useState<string | null>(null);
+  const [generatedRoomCode, setGeneratedRoomCode] = useState("");
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"overview" | "meetings">("overview");
 
-  // Meetings schedule state matching June 2026 calendar screenshot
-  const [meetings, setMeetings] = useState([
-    {
-      id: "meet-1",
-      title: "Class 12 Physics live revision",
-      classLevel: "Class 12",
-      date: "2026-06-15",
-      startTime: "09:00 AM",
-      endTime: "10:00 AM",
-      type: "Live Class",
-      description: "Revision of Coulomb's Law and Electrostatics formulas.",
-      status: "Completed",
-    },
-    {
-      id: "meet-2",
-      title: "Maths Doubt Solving Session",
-      classLevel: "Class 12",
-      date: "2026-06-17",
-      startTime: "04:00 PM",
-      endTime: "05:00 PM",
-      type: "Doubt Room",
-      description: "Clearing doubts from Chapter 1 (Matrices).",
-      status: "Completed",
-    },
-    {
-      id: "meet-3",
-      title: "Class 12 Chemistry Live Session",
-      classLevel: "Class 12",
-      date: "2026-06-21",
-      startTime: "11:00 AM",
-      endTime: "12:00 PM",
-      type: "Live Class",
-      description: "Metallurgy extraction processes overview.",
-      status: "Upcoming",
-    },
-  ]);
+  // Meetings schedule state initialized with mocks, updated by DB
+  const [meetings, setMeetings] = useState<any[]>([]);
 
-  const [selectedDay, setSelectedDay] = useState(18);
+  const fetchMeetings = async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/live-classes`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.meetings) {
+          setMeetings(data.meetings);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch DB live classes:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMeetings();
+    const interval = setInterval(fetchMeetings, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const today = new Date();
+  const todayDay = today.getDate();
+  const todayFormatted = `${todayDay.toString().padStart(2, "0")}/${(today.getMonth() + 1).toString().padStart(2, "0")}/${today.getFullYear()}`;
+
+  const [selectedDay, setSelectedDay] = useState(todayDay);
 
   const [formData, setFormData] = useState({
     classLevel: "Class 12",
-    date: "18/06/2026",
+    date: todayFormatted,
     type: "Live Class",
     startTime: "09:00 AM",
     endTime: "10:00 AM",
@@ -82,42 +78,108 @@ export const TeacherDashboard: React.FC = () => {
     }));
   };
 
-  const handleCreateMeeting = (e: React.FormEvent) => {
+  const handleCreateMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Parse date from DD/MM/YYYY to YYYY-MM-DD
     const dateParts = formData.date.split("/");
     const dbDate =
       dateParts.length === 3
-        ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
-        : `2026-06-${selectedDay.toString().padStart(2, "0")}`;
+          ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
+          : `2026-06-${selectedDay.toString().padStart(2, "0")}`;
 
-    const newMeeting = {
-      id: `meet-${Date.now()}`,
-      title: formData.title,
-      classLevel: formData.classLevel,
-      date: dbDate,
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      type: formData.type,
-      description: formData.description,
-      status: "Upcoming" as const,
-    };
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
 
-    setMeetings((prev) => [...prev, newMeeting]);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/live-classes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          classLevel: formData.classLevel,
+          date: dbDate,
+          startTime: formData.startTime,
+          endTime: formData.endTime,
+          type: formData.type,
+          description: formData.description,
+        })
+      });
 
-    // Clear title & description
-    setFormData((prev) => ({
-      ...prev,
-      title: "",
-      description: "",
-    }));
+      if (res.ok) {
+        const data = await res.json();
+        const autoCode = data?.liveClass?.meetingUrl || "";
+        setGeneratedRoomCode(autoCode);
+        fetchMeetings();
+        setFormData((prev) => ({
+          ...prev,
+          title: "",
+          description: "",
+        }));
+        useLmsStore.getState().addNotification(
+          "Meeting Scheduled",
+          `Meeting "${formData.title}" scheduled! Join Code: ${autoCode}`,
+          "success"
+        );
+      }
+    } catch (err) {
+      console.warn("Failed to schedule meeting:", err);
+    }
+  };
 
-    useLmsStore.getState().addNotification(
-      "Meeting Scheduled",
-      `Meeting "${formData.title}" scheduled for ${formData.date} successfully.`,
-      "success"
-    );
+  const handleGoLive = async (m: any) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/live-class/${m.id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: "Live" })
+      });
+
+      if (res.ok) {
+        // Configure global mock variables for video call identity mapping
+        (window as any)._activeTeacherSubject = m.subjectTitle || "General Lecture";
+        (window as any)._activeTeacherClass = m.classLevel;
+
+        useLmsStore.getState().joinLiveRoom({
+          roomName: m.roomName,
+          participantName: profile.name,
+          isTeacher: true
+        });
+        setView("webrtc-live");
+      }
+    } catch (err) {
+      console.warn("Failed to transition status to live:", err);
+    }
+  };
+
+  const handleCompleteMeeting = async (m: any) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/live-class/${m.id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: "Completed" })
+      });
+
+      if (res.ok) {
+        fetchMeetings();
+      }
+    } catch (err) {
+      console.warn("Failed to complete live class:", err);
+    }
   };
 
   // Derive counts
@@ -153,14 +215,14 @@ export const TeacherDashboard: React.FC = () => {
     e.preventDefault();
     if (!gradingAssignId) return;
 
-    gradeAssignment(gradingAssignId, `A (${score}/100)`, feedback);
+    gradeAssignment(gradingAssignId, `${score}/100`, feedback);
 
     // Add notification to student
     useLmsStore
       .getState()
       .addNotification(
         "Assignment Graded",
-        `Your submission has been graded: A (${score}/100). Check feedback details.`,
+        `Your submission has been graded: ${score}/100. Check feedback details.`,
         "success",
       );
 
@@ -321,24 +383,24 @@ export const TeacherDashboard: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="glass-card rounded-none p-5 border-slate-200 dark:border-white/5 bg-brand-violet/5 flex flex-col justify-between min-h-[180px]">
+                <div className="glass-card rounded-none p-5 border-slate-200 dark:border-white/5 bg-emerald-500/5 flex flex-col justify-between min-h-[180px]">
                   <div>
-                    <div className="w-10 h-10 rounded-none bg-brand-violet/10 border border-brand-violet/20 flex items-center justify-center">
-                      <PenTool className="w-5 h-5 text-brand-violet-light" />
+                    <div className="w-10 h-10 rounded-none bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-emerald-500" />
                     </div>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-3">
-                      Create Test
+                      View Submissions
                     </h4>
                     <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                      Build timed MCQ tests with AI-powered triggers.
+                      Review and grade homework submissions by class level.
                     </p>
                   </div>
                   <button
-                    onClick={() => setView("quiz-builder")}
-                    className="mt-4 py-2.5 rounded-none bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-white/5 text-slate-800 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-950 hover:border-brand-violet/30 text-xs font-semibold flex items-center justify-center gap-1 transition-all active:scale-95"
+                    onClick={() => setView("submissions")}
+                    className="mt-4 py-2.5 rounded-none bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-white/5 text-slate-800 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-950 hover:border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1 transition-all active:scale-95"
                   >
-                    <span>Construct exam</span>
-                    <ChevronRight className="w-4 h-4 text-brand-violet-light" />
+                    <span>View submissions</span>
+                    <ChevronRight className="w-4 h-4 text-emerald-500" />
                   </button>
                 </div>
               </div>
@@ -393,7 +455,7 @@ export const TeacherDashboard: React.FC = () => {
                               {a.title}
                             </h4>
                             <span className="text-[10px] text-slate-500 dark:text-slate-500 mt-0.5 block">
-                              {a.subjectTitle} • Submitted by Prathamesh
+                              {a.subjectTitle} • Submitted by {a.studentName || "Prathamesh"}
                             </span>
                           </div>
                           <span className="text-[9px] text-brand-royal dark:text-brand-royal-300 font-mono font-bold bg-slate-100 dark:bg-slate-950 px-2 py-1 rounded-none border border-slate-300 dark:border-white/5 flex-shrink-0">
@@ -559,30 +621,22 @@ export const TeacherDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Start Time</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 09:00 AM"
-                      value={formData.startTime}
-                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2 text-xs focus:outline-none focus:border-brand-royal text-slate-800 dark:text-white"
-                      required
-                    />
+                {generatedRoomCode && (
+                  <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/40 rounded">
+                    <div className="flex-1">
+                      <p className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-0.5">✅ Auto-Generated Join Code</p>
+                      <p className="font-mono text-sm font-extrabold text-emerald-800 dark:text-emerald-300 tracking-[0.2em]">{generatedRoomCode}</p>
+                      <p className="text-[9px] text-emerald-600 dark:text-emerald-500 mt-0.5">Sent to all enrolled students via notification & email</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedRoomCode)}
+                      className="text-[9px] bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 font-bold transition"
+                    >
+                      Copy
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select End Time</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 10:00 AM"
-                      value={formData.endTime}
-                      onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2 text-xs focus:outline-none focus:border-brand-royal text-slate-800 dark:text-white"
-                      required
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Meeting Title</label>
@@ -633,7 +687,7 @@ export const TeacherDashboard: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">June 2026</h4>
-                  <p className="text-[10px] text-slate-550">Click a date to view past and upcoming meetings.</p>
+
                 </div>
                 <div className="flex gap-2">
                   <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 border border-slate-200 dark:border-white/10 rounded-none text-slate-650 dark:text-slate-350 transition-colors">
@@ -732,15 +786,41 @@ export const TeacherDashboard: React.FC = () => {
                             )}
                           </div>
                           
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-none border ${
-                            m.status === "Completed"
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                              : m.status === "Live"
-                                ? "bg-red-500/10 text-red-655 dark:text-red-400 border-red-500/20 animate-pulse"
-                                : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                          }`}>
-                            {m.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {m.status === "Upcoming" && (
+                              <button
+                                onClick={() => handleGoLive(m)}
+                                className="px-2.5 py-1 bg-red-650 hover:bg-red-700 text-white font-extrabold text-[9px] uppercase tracking-wider transition active:scale-95 flex items-center gap-1 shrink-0 rounded"
+                              >
+                                Go Live
+                              </button>
+                            )}
+                            {m.status === "Live" && (
+                              <>
+                                <button
+                                  onClick={() => handleGoLive(m)}
+                                  className="px-2.5 py-1 bg-brand-royal hover:bg-brand-royal/90 text-white font-extrabold text-[9px] uppercase tracking-wider transition active:scale-95 flex items-center gap-1 shrink-0 rounded"
+                                >
+                                  Join Room
+                                </button>
+                                <button
+                                  onClick={() => handleCompleteMeeting(m)}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[9px] uppercase tracking-wider transition active:scale-95 flex items-center gap-1 shrink-0 rounded"
+                                >
+                                  Complete
+                                </button>
+                              </>
+                            )}
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-none border shrink-0 ${
+                              m.status === "Completed"
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : m.status === "Live"
+                                  ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 animate-pulse"
+                                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                            }`}>
+                              {m.status}
+                            </span>
+                          </div>
                         </div>
                       ))}
                   </div>
