@@ -2159,9 +2159,9 @@ export const AdminPortal: React.FC = () => {
             })}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {/* DRM Video list */}
-            <div className="lg:col-span-2 glass-card p-5 border-slate-200 dark:border-white/5 space-y-4 bg-white dark:bg-slate-950/40">
+            <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4 bg-white dark:bg-slate-950/40">
               <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-white/5">
                 <Lock className="w-4 h-4 text-brand-royal" /> DRM Encrypted Lectures
               </h4>
@@ -2189,27 +2189,6 @@ export const AdminPortal: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Prompt Copy / Dev Card */}
-            <div className="glass-card p-5 border-slate-200 dark:border-white/5 space-y-4 flex flex-col justify-between bg-white dark:bg-slate-950/40">
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-white/5 pb-2 flex items-center gap-1.5">
-                  <Brain className="w-4 h-4 text-brand-violet" /> Developer prompt
-                </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-sans">
-                  The LMS is equipped with Shaka Player and HLS/DASH support. Feed the engineering guidelines to your AI assistant to expand active streaming pipelines.
-                </p>
-                <div className="p-3 bg-slate-900 text-slate-300 rounded-xl text-[9px] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto border border-white/5 select-all">
-                  {drmPromptText}
-                </div>
-              </div>
-              <button
-                onClick={handleCopyPrompt}
-                className="w-full premium-btn-primary py-2.5 text-[10px] uppercase font-bold tracking-wider"
-              >
-                Copy Developer Guide
-              </button>
             </div>
           </div>
         </div>

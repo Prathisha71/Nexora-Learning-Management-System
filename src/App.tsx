@@ -45,6 +45,7 @@ import { TermsOfServicePage } from "./components/TermsOfServicePage";
 import { ContactSupportPage } from "./components/ContactSupportPage";
 import { SecureNotesPreview } from "./components/SecureNotesPreview";
 import { TeacherUploadedNotesPage } from "./components/TeacherUploadedNotesPage";
+import { getISTDate } from "./utils/dateUtils";
 
 function RoomJoinFallback() {
   const { setView, joinLiveRoom, profile, boards } = useLmsStore();
@@ -57,7 +58,7 @@ function RoomJoinFallback() {
 
   // States for Teacher Calendar & Scheduling Workspace
   const [meetings, setMeetings] = useState<any[]>([]);
-  const today = new Date();
+  const today = getISTDate();
   const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-indexed
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [selectedDay, setSelectedDay] = useState(today.getDate());

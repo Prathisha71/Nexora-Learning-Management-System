@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLmsStore } from "../store/index";
+import { formatDeadlineIST } from "../utils/dateUtils";
 import { getApiBaseUrl } from "../utils/apiBase";
 import {
   Sparkles,
@@ -12,14 +13,15 @@ import {
   ChevronRight,
   BookOpen,
 } from "lucide-react";
+import { getISTDate } from "../utils/dateUtils";
 
-// Helper function to determine meeting status based on current time in local timezone
+// Helper function to determine meeting status based on current time in IST timezone
 const getMeetingStatus = (date: string, startTime: string, endTime: string): "Live" | "Upcoming" | "Ended" => {
-  const now = new Date();
+  const now = getISTDate();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
-  const currentDateStr = `${year}-${month}-${day}`; // local YYYY-MM-DD
+  const currentDateStr = `${year}-${month}-${day}`; // IST YYYY-MM-DD
 
   const parseTimeToMinutes = (timeStr: string) => {
     const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -52,7 +54,7 @@ const getMeetingStatus = (date: string, startTime: string, endTime: string): "Li
 };
 
 export const StudentDashboard: React.FC = () => {
-  const { setView, profile, boards, assignments, setActiveCourseContext, joinLiveRoom } =
+  const { setView, profile, boards, assignments, quizResults, setActiveCourseContext, joinLiveRoom } =
     useLmsStore();
 
   const activeBoard =
@@ -129,18 +131,98 @@ export const StudentDashboard: React.FC = () => {
     setView("course-view");
   };
 
-  // Mock study metrics data for our visual dashboard charts
-  const mockStudyHours = [
-    { day: "Mon", hours: 4.2 },
-    { day: "Tue", hours: 5.5 },
-    { day: "Wed", hours: 3.8 },
-    { day: "Thu", hours: 6.2 },
-    { day: "Fri", hours: 4.8 },
-    { day: "Sat", hours: 8.0 },
-    { day: "Sun", hours: 2.5 },
-  ];
+  // ── Consistent Study Days: binary active/inactive per weekday (no points) ──
+  const studyChartData = (() => {
+    const shortLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const maxHours = Math.max(...mockStudyHours.map((d) => d.hours));
+    // Track which days-of-week (0=Sun…6=Sat) had ANY activity this week
+    const activeDow = new Set<number>();
+
+    // Today in IST
+    const nowIST = getISTDate();
+    const todayDow = nowIST.getDay();
+
+    // Helper: parse "DD/MM/YYYY" or ISO string → IST Date, null if invalid
+    const parseIST = (dateStr: string): Date | null => {
+      try {
+        const enIN = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        const d = enIN
+          ? new Date(`${enIN[3]}-${enIN[2].padStart(2,'0')}-${enIN[1].padStart(2,'0')}T00:00:00+05:30`)
+          : new Date(dateStr);
+        return isNaN(d.getTime()) ? null : d;
+      } catch { return null; }
+    };
+
+    // A date is "this week" if it's within the last 6 days (Mon–today)
+    const isThisWeek = (dateStr: string): boolean => {
+      const d = parseIST(dateStr);
+      if (!d) return false;
+      const diffDays = Math.floor((nowIST.getTime() - getISTDate(d).getTime()) / 86400000);
+      return diffDays >= 0 && diffDays <= 6;
+    };
+
+    const getDow = (dateStr: string): number => {
+      const d = parseIST(dateStr);
+      return d ? getISTDate(d).getDay() : -1;
+    };
+
+    // Mark days with quiz activity
+    quizResults.forEach((r) => {
+      if (isThisWeek(r.date)) {
+        const dow = getDow(r.date);
+        if (dow >= 0) activeDow.add(dow);
+      }
+    });
+
+    // Any completed topic → mark today as active (no timestamp on topics)
+    const hasCompletedTopic = boards.some((b) =>
+      b.classes.some((c) =>
+        c.subjects.some((s) =>
+          s.chapters.some((ch) =>
+            ch.topics.some((t) => t.isCompleted)
+          )
+        )
+      )
+    );
+    if (hasCompletedTopic) activeDow.add(todayDow);
+
+    // Mark days with submitted assignments
+    assignments.forEach((a) => {
+      if (a.status !== "Pending" && a.deadline && isThisWeek(a.deadline)) {
+        const dow = getDow(a.deadline);
+        if (dow >= 0) activeDow.add(dow);
+      }
+    });
+
+    // If no real data at all, mark Mon–today so the chart isn't completely empty on first load
+    // (only fill the days up to and including today)
+    if (activeDow.size === 0) {
+      // Days from Monday (1) up to today in week order
+      [1, 2, 3, 4, 5, 6, 0].forEach((dow) => {
+        const diffToday = (todayDow - dow + 7) % 7;
+        if (diffToday <= (todayDow === 0 ? 6 : todayDow - 1)) {
+          activeDow.add(dow);
+        }
+      });
+      // Always mark today
+      activeDow.add(todayDow);
+    }
+
+    // Build Mon–Sun ordered list
+    const ordered = [1, 2, 3, 4, 5, 6, 0].map((dow) => ({
+      day: shortLabels[dow === 0 ? 6 : dow - 1],
+      isActive: activeDow.has(dow),
+      isToday: dow === todayDow,
+      isFuture: (() => {
+        const diff = (dow - todayDow + 7) % 7;
+        return diff > 0 && diff < 7;
+      })(),
+      dow,
+    }));
+
+    const consistentDays = ordered.filter((d) => d.isActive).length;
+    return { days: ordered, consistentDays };
+  })();
 
   return (
     <div className="space-y-6 font-sans">
@@ -253,7 +335,7 @@ export const StudentDashboard: React.FC = () => {
             })}
           </div>
 
-          {/* Performance Analytics Custom Visual Chart */}
+          {/* Consistent Study Days Chart */}
           <div className="glass-card p-6 border-slate-200 dark:border-white/5">
             <div className="flex items-center justify-between mb-6 text-left">
               <div>
@@ -265,49 +347,71 @@ export const StudentDashboard: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-1.5 text-[10px] text-slate-600 dark:text-slate-400 font-bold select-none">
-                <span>Consistent: 6/7 Days</span>
+                <span>Consistent: {studyChartData.consistentDays}/7 Days</span>
               </div>
             </div>
 
-            {/* Custom SVG Bar Chart */}
-            <div className="space-y-2">
-              {/* Bars container with baseline border */}
-              <div className="h-40 flex items-end justify-between gap-3 pt-6 border-b border-slate-200 dark:border-white/5 px-2">
-                {mockStudyHours.map((data, index) => {
-                  const heightPercent = (data.hours / maxHours) * 85; // cap height
+            {/* Binary Bar Chart — uniform height for active days */}
+            <div className="space-y-3">
+              <div className="h-40 flex items-end justify-between gap-3 pt-4 border-b border-slate-200 dark:border-white/5 px-2">
+                {studyChartData.days.map((data, index) => {
+                  const barHeight = data.isActive ? 75 : 8;
+                  const isToday = data.isToday;
                   return (
                     <div
                       key={index}
                       className="h-full flex-1 flex flex-col justify-end items-center group cursor-pointer relative"
                     >
-                      {/* Tooltip */}
-                      <div
-                        style={{ bottom: `calc(${heightPercent}% + 8px)` }}
-                        className="absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[9px] font-bold py-1 px-1.5 rounded shadow-lg transition-opacity pointer-events-none whitespace-nowrap z-20"
-                      >
-                        Active Day ({data.hours}h study)
-                      </div>
                       {/* Bar */}
                       <div
-                        style={{
-                          height: `${heightPercent}%`,
-                          borderRadius: "0px",
-                        }}
-                        className="w-full max-w-[24px] bg-brand-royal/70 group-hover:bg-brand-royal transition-all group-hover:shadow-[0_0_15px_rgba(37,99,235,0.2)]"
+                        style={{ height: `${barHeight}%` }}
+                        className={`w-full max-w-[28px] rounded-sm transition-all duration-300 ${
+                          data.isFuture
+                            ? "bg-slate-200 dark:bg-slate-800/60"
+                            : data.isActive
+                            ? isToday
+                              ? "bg-brand-royal shadow-[0_0_14px_rgba(37,99,235,0.4)] group-hover:bg-brand-royal/90"
+                              : "bg-brand-royal/70 group-hover:bg-brand-royal"
+                            : "bg-slate-200 dark:bg-slate-800/60 group-hover:bg-slate-300 dark:group-hover:bg-slate-700"
+                        }`}
                       />
+
+                      {/* Today dot */}
+                      {isToday && (
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-brand-royal" />
+                      )}
                     </div>
                   );
                 })}
               </div>
-              {/* Labels container below baseline */}
-              <div className="flex justify-between gap-3 px-2">
-                {mockStudyHours.map((data, index) => (
+
+              {/* Day labels */}
+              <div className="flex justify-between gap-3 px-2 pt-1">
+                {studyChartData.days.map((data, index) => (
                   <div key={index} className="flex-1 text-center">
-                    <span className="text-[10px] text-slate-500 font-semibold">
+                    <span className={`text-[10px] font-semibold ${
+                      data.isToday
+                        ? "text-brand-royal font-bold"
+                        : data.isActive
+                        ? "text-slate-700 dark:text-slate-300"
+                        : "text-slate-400 dark:text-slate-600"
+                    }`}>
                       {data.day}
                     </span>
                   </div>
                 ))}
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 pt-1">
+                <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <span className="w-3 h-3 rounded-sm bg-brand-royal/70 inline-block" />
+                  Studied
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <span className="w-3 h-3 rounded-sm bg-slate-200 dark:bg-slate-700 inline-block" />
+                  No activity / Upcoming
+                </span>
               </div>
             </div>
           </div>
@@ -430,7 +534,7 @@ export const StudentDashboard: React.FC = () => {
                           {assign.title}
                         </h4>
                         <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-0.5">
-                          {assign.subjectTitle} • Due {assign.deadline}
+                          {assign.subjectTitle} • Due {formatDeadlineIST(assign.deadline)}
                         </p>
                       </div>
                       <span

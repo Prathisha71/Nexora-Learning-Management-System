@@ -16,6 +16,7 @@ import {
   GraduationCap,
   Calendar,
 } from "lucide-react";
+import { getISTDate } from "../utils/dateUtils";
 
 export const TeacherDashboard: React.FC = () => {
   const { assignments, gradeAssignment, setView, boards, profile, fetchAssignments } = useLmsStore();
@@ -77,7 +78,7 @@ export const TeacherDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const today = new Date();
+  const today = getISTDate();
   const todayDay = today.getDate();
   const todayFormatted = `${todayDay.toString().padStart(2, "0")}/${(today.getMonth() + 1).toString().padStart(2, "0")}/${today.getFullYear()}`;
 
@@ -294,7 +295,7 @@ export const TeacherDashboard: React.FC = () => {
   ];
 
   // Current hour greeting
-  const hour = new Date().getHours();
+  const hour = getISTDate().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
@@ -312,7 +313,7 @@ export const TeacherDashboard: React.FC = () => {
           </div>
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-500">
             <Clock className="w-3.5 h-3.5" />
-            <span>{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}</span>
+            <span>{getISTDate().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}</span>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLmsStore } from "../store/index";
 import { getApiBaseUrl } from "../utils/apiBase";
+import { formatDeadlineIST } from "../utils/dateUtils";
 import {
   FileText,
   Calendar,
@@ -160,7 +161,7 @@ export const AssignmentPage: React.FC = () => {
                     Due Date
                   </span>
                   <p className="text-slate-800 dark:text-slate-200 font-semibold mt-0.5">
-                    {activeAssign.deadline}
+                    {formatDeadlineIST(activeAssign.deadline)}
                   </p>
                 </div>
               </div>
@@ -417,7 +418,7 @@ export const AssignmentPage: React.FC = () => {
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-500 font-semibold w-full">
                       <span className={subjectTextColor}>{a.subjectTitle}</span>
-                      <span>Due: {a.deadline}</span>
+                      <span>Due: {formatDeadlineIST(a.deadline)}</span>
                     </div>
                   </button>
                 );

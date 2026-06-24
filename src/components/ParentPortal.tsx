@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLmsStore } from "../store/index";
+import { formatDeadlineIST } from "../utils/dateUtils";
 import {
   User,
   BookOpen,
@@ -172,7 +173,7 @@ export const ParentPortal: React.FC = () => {
                   <div key={as.id} className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-xl text-xs">
                     <div className="space-y-1">
                       <p className="font-bold text-slate-900 dark:text-white">{as.title}</p>
-                      <p className="text-[10px] text-slate-500">Subject: {as.subjectTitle} • Deadline: {as.deadline}</p>
+                      <p className="text-[10px] text-slate-500">Subject: {as.subjectTitle} • Deadline: {formatDeadlineIST(as.deadline)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${

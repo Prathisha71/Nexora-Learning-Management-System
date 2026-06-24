@@ -565,15 +565,19 @@ router.post('/live-classes', requireAuth, async (req, res) => {
       const [endH, endM] = parseTime(endTime);
       const [year, month, day] = date.split('-').map(Number);
 
-      start = new Date(year, month - 1, day, startH, startM, 0, 0);
-      end = new Date(year, month - 1, day, endH, endM, 0, 0);
+      const startUtc = Date.UTC(year, month - 1, day, startH, startM, 0, 0);
+      const endUtc = Date.UTC(year, month - 1, day, endH, endM, 0, 0);
+
+      start = new Date(startUtc - (5.5 * 60 * 60 * 1000));
+      end = new Date(endUtc - (5.5 * 60 * 60 * 1000));
 
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         throw new Error('Invalid date format');
       }
     } catch {
-      start = new Date();
-      end = new Date(Date.now() + 60 * 60 * 1000);
+      const d = new Date();
+      start = d;
+      end = new Date(d.getTime() + 60 * 60 * 1000);
     }
 
     const generateRoomCode = () => {
@@ -722,22 +726,37 @@ router.get('/live-classes', requireAuth, async (req, res) => {
       else if (lc.status === 'COMPLETED') status = 'Completed';
       else if (lc.status === 'CANCELLED') status = 'Cancelled';
 
-      const year = lc.scheduledStart.getFullYear();
-      const month = String(lc.scheduledStart.getMonth() + 1).padStart(2, '0');
-      const day = String(lc.scheduledStart.getDate()).padStart(2, '0');
+      const getISTDateParts = (d: Date) => {
+        const istTime = d.getTime() + (5.5 * 60 * 60 * 1000);
+        const istDate = new Date(istTime);
+        return {
+          year: istDate.getUTCFullYear(),
+          month: istDate.getUTCMonth(),
+          date: istDate.getUTCDate(),
+          hours: istDate.getUTCHours(),
+          minutes: istDate.getUTCMinutes()
+        };
+      };
+
+      const startParts = getISTDateParts(lc.scheduledStart);
+      const endParts = getISTDateParts(lc.scheduledEnd);
+
+      const year = startParts.year;
+      const month = String(startParts.month + 1).padStart(2, '0');
+      const day = String(startParts.date).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
 
-      const formatLocalTime = (d: Date) => {
-        let hours = d.getHours();
-        const minutes = String(d.getMinutes()).padStart(2, '0');
+      const formatISTTime = (parts: ReturnType<typeof getISTDateParts>) => {
+        let hours = parts.hours;
+        const minutes = String(parts.minutes).padStart(2, '0');
         const ampm = hours >= 12 ? 'PM' : 'AM';
         hours = hours % 12;
         hours = hours ? hours : 12;
         return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
       };
 
-      const startTimeStr = formatLocalTime(lc.scheduledStart);
-      const endTimeStr = formatLocalTime(lc.scheduledEnd);
+      const startTimeStr = formatISTTime(startParts);
+      const endTimeStr = formatISTTime(endParts);
 
       return {
         id: lc.id,

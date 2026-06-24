@@ -74,6 +74,13 @@ export const QuizInterface: React.FC = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [allQuestionsDetails, setAllQuestionsDetails] = useState<Array<{
+    question: string;
+    yourAnswer: string;
+    correctAnswer: string;
+    explanation: string;
+    isCorrect: boolean;
+  }>>([]);
 
   const timerRef = useRef<number | null>(null);
 
@@ -170,9 +177,11 @@ export const QuizInterface: React.FC = () => {
           : "chemistry-12-c1-t1";
     }
 
+    const allDetails: typeof allQuestionsDetails = [];
     activeQuiz.questions.forEach((q) => {
       const selected = selectedAnswers[q.id];
-      if (selected === q.correctAnswerIndex) {
+      const isCorrect = selected === q.correctAnswerIndex;
+      if (isCorrect) {
         score += 1;
       } else {
         incorrectDetails.push({
@@ -184,7 +193,15 @@ export const QuizInterface: React.FC = () => {
           recommendedTopicId: firstTopicId,
         });
       }
+      allDetails.push({
+        question: q.question,
+        yourAnswer: selected !== undefined ? q.options[selected] : "Not Attempted",
+        correctAnswer: q.options[q.correctAnswerIndex],
+        explanation: q.explanation,
+        isCorrect,
+      });
     });
+    setAllQuestionsDetails(allDetails);
 
     const timeSpent = activeQuiz.durationMinutes * 60 - timeLeftSeconds;
 
@@ -675,13 +692,25 @@ export const QuizInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* Remedial AI Suggestions / Incorrect Answers Review */}
+          {/* Full Question-by-Question Review */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left">
-              Weak Area Review & Incorrect Answers
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left">
+                Full Question Review &amp; Explanations
+              </h4>
+              <div className="flex items-center gap-3 text-[10px] font-bold">
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {result?.score ?? 0} Correct
+                </span>
+                <span className="flex items-center gap-1 text-red-500">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {(result?.totalQuestions ?? 0) - (result?.score ?? 0)} Incorrect
+                </span>
+              </div>
+            </div>
 
-            {result?.incorrectAnswersDetails.length === 0 ? (
+            {allQuestionsDetails.length === 0 ? (
               <div className="glass-card p-6 border-slate-200 dark:border-white/5 flex gap-4 text-left items-start">
                 <CheckCircle className="w-6 h-6 text-emerald-500 flex-shrink-0" />
                 <div>
@@ -689,50 +718,73 @@ export const QuizInterface: React.FC = () => {
                     Flawless Conceptual Mastery!
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                    You answered all questions correctly. No remedial reading is
-                    recommended. You received a perfect score certificate in
-                    your profile panel!
+                    You answered all questions correctly. You received a perfect score certificate in your profile panel!
                   </p>
                 </div>
               </div>
             ) : (
               <div className="space-y-3 text-left">
-                {result?.incorrectAnswersDetails.map((detail, idx) => (
+                {allQuestionsDetails.map((detail, idx) => (
                   <div
                     key={idx}
-                    className="glass-card p-5 border-slate-200 dark:border-white/5 text-left space-y-4"
+                    className={`glass-card p-5 text-left space-y-4 border ${
+                      detail.isCorrect
+                        ? "border-emerald-500/20 dark:border-emerald-500/15 bg-emerald-500/5"
+                        : "border-red-400/20 dark:border-red-500/15 bg-red-500/5"
+                    }`}
                   >
-                    <div>
-                      <span className="text-[9px] bg-red-500/10 text-red-600 border border-red-500/20 px-2 py-0.5 rounded-full font-bold uppercase">
-                        Review Question {idx + 1}
-                      </span>
-                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-3 leading-relaxed">
-                        {detail.question}
-                      </h4>
+                    <div className="flex items-start gap-2">
+                      <div className="flex-shrink-0 mt-0.5">
+                        {detail.isCorrect ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-500" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase border ${
+                            detail.isCorrect
+                              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                              : "bg-red-500/10 text-red-600 border-red-500/20"
+                          }`}>
+                            Question {idx + 1} • {detail.isCorrect ? "Correct" : "Incorrect"}
+                          </span>
+                        </div>
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-relaxed">
+                          {detail.question}
+                        </h4>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5">
-                        <span className="text-[9px] text-slate-500 font-bold uppercase">
-                          Your Choice:
+                      <div className={`p-3 rounded-lg border ${
+                        detail.isCorrect
+                          ? "bg-emerald-500/5 border-emerald-500/10"
+                          : "bg-red-500/5 border-red-400/15"
+                      }`}>
+                        <span className={`text-[9px] font-bold uppercase block mb-1 ${
+                          detail.isCorrect ? "text-emerald-600" : "text-red-500"
+                        }`}>
+                          Your Answer:
                         </span>
-                        <p className="text-slate-800 dark:text-slate-300 font-medium mt-1">
+                        <p className="text-slate-800 dark:text-slate-300 font-medium">
                           {detail.yourAnswer}
                         </p>
                       </div>
                       <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
-                        <span className="text-[9px] text-emerald-600 font-bold uppercase">
+                        <span className="text-[9px] text-emerald-600 font-bold uppercase block mb-1">
                           Correct Answer:
                         </span>
-                        <p className="text-emerald-700 dark:text-emerald-300 font-medium mt-1">
+                        <p className="text-emerald-700 dark:text-emerald-300 font-medium">
                           {detail.correctAnswer}
                         </p>
                       </div>
                     </div>
 
                     <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/5 text-xs text-slate-600 dark:text-slate-400">
-                      <span className="text-[9px] text-brand-violet font-bold uppercase block mb-1">
-                        Explanation:
+                      <span className="text-[9px] text-brand-violet font-bold uppercase block mb-1.5">
+                        💡 Explanation:
                       </span>
                       <p className="leading-relaxed">{detail.explanation}</p>
                     </div>
