@@ -1,6 +1,6 @@
 # Nexora Learning Platform - Key System Workflows
 
-This document outlines the core workflows inside the Nexora codebase. Use this to walk your team through how frontend interactions, backend services, and databases interact to power these features.
+This document outlines the core technical workflows inside the Nexora LMS codebase. Use this to understand how frontend interactions, backend services, and PostgreSQL databases interact.
 
 ---
 
@@ -32,13 +32,13 @@ sequenceDiagram
 
 ## 2. Dynamic Quiz Generation Workflow
 
-When a student clicks "Topic Quiz" for the first time, this flow generates questions dynamically.
+When a student clicks "Topic Quiz" for the first time, this flow checks or generates questions dynamically.
 
 ```mermaid
 sequenceDiagram
     participant User as Student Client
     participant API as Express API
-    participant AI as Gemini / Pollinations
+    participant AI as Gemini AI
     participant DB as PostgreSQL (Prisma)
 
     User->>API: GET /topics/:topicId/quizzes

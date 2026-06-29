@@ -4,43 +4,71 @@ This document details the configuration and initialization steps for local setup
 
 ---
 
-## 1. PostgreSQL Database Setup
+## 1. Automated Quick Setup (Recommended)
 
-Nexora LMS uses PostgreSQL as its primary relational database.
+Nexora LMS comes with an automated database and server setup script.
 
-### Installation & Creation
-1. Download and install PostgreSQL (v14 or higher is recommended) on your machine.
-2. Configure the PostgreSQL server to listen on port **5433** (or the port specified in your `.env` file).
-3. Set the default database user (`postgres`) password to `12345`.
-4. Create a new database named `lms_db`:
-   ```sql
-   CREATE DATABASE lms_db;
-   ```
+```bash
+# Install dependencies
+npm install
 
-### Local Embedded Fallback
-If local PostgreSQL is not installed on the system, the application is equipped with an **Embedded PostgreSQL** instance which will automatically initialize, configure user/password (`postgres` / `12345`), create `lms_db` on port **5433**, and start up alongside the backend development server.
+# Initialize embedded PostgreSQL database, run migrations, and seed default data
+npm run db:setup
+
+# Start development servers (Client + API)
+npm run dev
+```
 
 ---
 
-## 2. Environment Variables
+## 2. PostgreSQL Database Setup
 
-Create a file named `.env` in the root of the project directory and fill in the values below:
+Nexora LMS uses PostgreSQL as its primary relational database.
+
+### Embedded PostgreSQL Fallback
+If local PostgreSQL is not installed on the system, the application automatically uses an **Embedded PostgreSQL** instance (`.pgdata`) which initializes, configures user/password (`postgres` / `postgres`), creates `lms_db` on port **5432**, and starts up alongside the application.
+
+### Manual PostgreSQL Configuration (Optional)
+If you prefer using an external PostgreSQL server or Docker container:
+1. Ensure PostgreSQL (v14+) is running on port **5432**.
+2. Create a database named `lms_db`.
+3. Configure your `DATABASE_URL` in `.env`.
+
+---
+
+## 3. Environment Variables
+
+Create a `.env` file in the project root directory and configure your variables:
 
 ```env
-# Database url on port 5433
-DATABASE_URL="postgresql://postgres:12345@127.0.0.1:5433/lms_db"
+# Database URL (Port 5432)
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/lms_db"
 
-# Server Port
+# Backend Server Port
 PORT=3000
 
 # Authentication Secret
-JWT_SECRET="nexora-lms-super-secret-jwt-2024"
+JWT_SECRET="eduverse-dev-secret-change-in-production"
 
-# Client API endpoint
+# Frontend API Endpoint
 VITE_API_URL="http://localhost:3000/api"
 
-# AI Tutor Integration
+# Default Admin Seed Password
+ADMIN_SEED_PASSWORD="password123"
+
+# AI Tutor Integration (Optional)
 GEMINI_API_KEY="your-gemini-api-key-here"
+
+# LiveKit Classroom Integration (Optional)
+LIVEKIT_URL="your-livekit-url"
+LIVEKIT_API_KEY="your-livekit-key"
+LIVEKIT_API_SECRET="your-livekit-secret"
+VITE_LIVEKIT_URL="your-livekit-url"
+
+# ─── Gmail SMTP Configuration (Optional for email dispatch) ───────────────────
+SMTP_USER="your-email@gmail.com"
+SMTP_PASS="your-16-character-gmail-app-password"
+SMTP_FROM="Nexora Learning <your-email@gmail.com>"
 
 # ─── MinIO (S3-compatible local object storage) ──────────────────────────────
 MINIO_ENDPOINT="localhost"
@@ -49,77 +77,24 @@ MINIO_ACCESS_KEY="minioadmin"
 MINIO_SECRET_KEY="minioadmin123"
 MINIO_BUCKET="lms-files"
 MINIO_USE_SSL=false
-
-# ─── Gmail SMTP ─────────────────────────────────────────────────────────────
-SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-gmail-app-password"
-SMTP_FROM="Nexora Learning <your-email@gmail.com>"
 ```
 
 ---
 
-## 3. Initialization Commands
+## 4. Initialization Commands Reference
 
-Execute the following commands in order to install dependencies, push the schema, and seed the local database:
-
-### Step 1: Install Node Dependencies
-```bash
-npm install
-```
-
-### Step 2: Generate Prisma Client
-```bash
-npx prisma generate
-```
-
-### Step 3: Run Database Migrations
-Run the database migrations to build tables on PostgreSQL:
-```bash
-npx prisma migrate dev --name init
-```
-*(Alternatively, for local development, you can push the schema directly using `npx prisma db push`)*
-
-### Step 4: Seed Initial Data
-Insert dynamic boards, classes, subjects, topics, quizzes, and initial admin/teacher user credentials into the database:
-```bash
-npx prisma db seed
-```
-
-### Step 5: Start Development Server
-```bash
-npm run dev
-```
-The client will be running at `http://localhost:5173/` (or `http://localhost:5174/`), and the backend API at `http://localhost:3000/api`.
+| Command | Action |
+|---|---|
+| `npm install` | Installs all required Node modules |
+| `npm run db:setup` | Starts database, pushes Prisma schema, and seeds data |
+| `npx prisma db seed` | Re-seeds database with initial admin and curriculum data |
+| `npx prisma studio` | Opens Prisma Studio GUI at `http://localhost:5555` |
+| `npm run dev` | Starts frontend (`:5173`) and backend (`:3000`) |
 
 ---
 
-## 4. MinIO Local Configuration
+## 5. Admin Portal Credentials
 
-Nexora LMS uses MinIO as S3-compatible local object storage to upload study notes, assignment attachments, and video lectures.
-
-### Setup Instructions
-1. Ensure your MinIO server/Docker container is running on `localhost:9000` (API) and `localhost:9001` (Console).
-2. Open your browser and go to the Console: `http://localhost:9001`
-3. Log in using your credentials:
-   - **Username**: `minioadmin`
-   - **Password**: `minioadmin123`
-4. On the left sidebar, click **Buckets**.
-5. Click **Create Bucket**, name it `lms-files`, and click **Create**.
-6. Ensure bucket access policies permit reading files.
-7. Confirm your `.env` contains the required MinIO credentials.
-
----
-
-## 5. Gmail SMTP Configuration
-
-The platform automatically sends credentials, registrations, and account notifications via Gmail SMTP.
-
-### Setup Instructions
-1. Log into your Google Account and go to **Security**.
-2. Ensure **2-Step Verification** is enabled.
-3. Search for or go to **App Passwords**.
-4. Generate a new app password (e.g., call it "Nexora LMS").
-5. Copy the generated **16-character code** (no spaces).
-6. Fill in the parameters in your `.env`:
-   - `SMTP_USER` = Your Gmail address (e.g., `user@gmail.com`)
-   - `SMTP_PASS` = The 16-character app password (e.g., `abcd efgh ijkl mnop`)
+Once initialized, access the Administrator portal at **[http://localhost:5173/#/login-educator](http://localhost:5173/#/login-educator)**:
+- **Academic Email:** `admin@nexoralearning.com`
+- **Password:** `password123`
