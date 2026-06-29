@@ -1,44 +1,75 @@
-# EduVerse LMS
+# 🎓 Nexora LMS — Learning Management System
 
-Full-stack learning management prototype with React + Vite frontend and Express + Prisma + PostgreSQL backend.
+Nexora LMS is a comprehensive, modern full-stack Learning Management System tailored for Class 9–12 scholars and educators, featuring AI tutoring, interactive quizzes, video streaming, and robust administrator management.
 
-## Quick start
+---
+
+## 🚀 Quick Start
+
+Follow these simple commands to get the application up and running locally:
 
 ```bash
+# 1. Install dependencies
 npm install
+
+# 2. Automatically initialize embedded PostgreSQL, apply migrations, and seed data
 npm run db:setup
+
+# 3. Start development server (Frontend + Backend concurrent)
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- API: http://localhost:3000/api/health
+- **Frontend Application:** [http://localhost:5173](http://localhost:5173)
+- **Backend API Endpoint:** [http://localhost:3000/api](http://localhost:3000/api)
 
-## Demo accounts (after seed)
+---
 
-| Role    | Email                 | Password      |
-|---------|-----------------------|---------------|
-| Student | student@eduverse.com  | password123   |
-| Teacher | teacher@eduverse.com  | password123   |
-| Admin   | admin@eduverse.com    | password123   |
+## 🔑 Default Administrator Credentials
 
-## Scripts
+After running `npm run db:setup` or `npx prisma db seed`, you can log into the **Educator / Admin Portal**:
 
-- `npm run dev` — frontend + API together
-- `npm run dev:client` — Vite only
-- `npm run dev:server` — API only
-- `npm run db:setup` — start embedded Postgres, push schema, seed data
-- `npm run db:studio` — Prisma Studio
+| Portal Role | Academic Email | Password |
+|---|---|---|
+| **Administrator** | `admin@nexoralearning.com` | `password123` |
 
-## Database
+*(Note: Educators/Teachers are registered via the Admin Portal. Scholars self-register or are registered by admins).*
 
-Uses embedded PostgreSQL by default (stored in `.pgdata`). Alternatively, run Docker Postgres:
+---
 
+## 🛠️ Key Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Runs both Vite frontend and Express server concurrently |
+| `npm run dev:client` | Runs frontend Vite server only (`localhost:5173`) |
+| `npm run dev:server` | Runs backend Express API server only (`localhost:3000`) |
+| `npm run db:setup` | Automates embedded PostgreSQL startup, schema synchronization, and seeding |
+| `npm run db:studio` | Launches Prisma Studio GUI to view and edit database tables |
+| `npm run build` | Builds production artifacts |
+
+---
+
+## 🗄️ Database Setup
+
+Nexora LMS includes an **Embedded PostgreSQL** instance (`.pgdata`) that automatically runs locally on port `5432` without requiring a pre-installed standalone PostgreSQL server.
+
+Alternatively, if using an external PostgreSQL server or Docker:
 ```bash
 docker compose up -d
 ```
+Update the `DATABASE_URL` in your `.env` file accordingly.
 
-Then set `DATABASE_URL` in `.env`.
+---
 
-## Repository
+## 💻 Tech Stack
 
-https://github.com/Prathisha71/LMS1
+- **Frontend:** React, TypeScript, Vite, TailwindCSS, Lucide Icons, Zustand
+- **Backend:** Node.js, Express, TypeScript, Prisma ORM, Nodemailer (Gmail SMTP)
+- **Database:** PostgreSQL (with embedded local fallback support)
+- **Integrations:** LiveKit (Interactive Classrooms), Google Gemini AI (AI Tutor)
+
+---
+
+## 📦 Repository
+
+[https://github.com/Prathisha71/Nexora-Learning-Management-System.git](https://github.com/Prathisha71/Nexora-Learning-Management-System.git)
