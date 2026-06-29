@@ -67,9 +67,3 @@ Update the `DATABASE_URL` in your `.env` file accordingly.
 - **Backend:** Node.js, Express, TypeScript, Prisma ORM, Nodemailer (Gmail SMTP)
 - **Database:** PostgreSQL (with embedded local fallback support)
 - **Integrations:** LiveKit (Interactive Classrooms), Google Gemini AI (AI Tutor)
-
----
-
-## 📦 Repository
-
-[https://github.com/Prathisha71/Nexora-Learning-Management-System.git](https://github.com/Prathisha71/Nexora-Learning-Management-System.git)
