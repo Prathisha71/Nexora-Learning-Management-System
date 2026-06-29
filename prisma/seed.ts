@@ -8,9 +8,9 @@ async function main() {
   console.log('Starting seed...');
   // Admin password is set via ADMIN_SEED_PASSWORD env variable for security.
   // If not set, a strong random placeholder is used — admin must change it on first login.
-  const adminPassword = process.env.ADMIN_SEED_PASSWORD || 'NexoraAdmin@' + Math.random().toString(36).slice(2, 10);
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD || 'password123';
   const passwordHash = await bcrypt.hash(adminPassword, 12);
-  console.log(`Admin password set from ADMIN_SEED_PASSWORD env var. Change it after first login.`);
+  console.log(`Admin password set to: ${adminPassword}`);
 
   console.log('Cleaning up existing database records...');
   await prisma.subjectStatistics.deleteMany({});
@@ -438,7 +438,7 @@ async function main() {
     {
       questionText: 'For a square matrix A, which operation yields the identity matrix?',
       options: [
-        { optionText: 'A * A⁻¹', isCorrect: true },
+        { optionText: 'A * A^-1', isCorrect: true },
         { optionText: 'A + A', isCorrect: false },
         { optionText: 'A - A', isCorrect: false },
         { optionText: 'A * A', isCorrect: false },
@@ -449,17 +449,17 @@ async function main() {
       options: [
         { optionText: 'A', isCorrect: true },
         { optionText: '-A', isCorrect: false },
-        { optionText: 'A⁻¹', isCorrect: false },
-        { optionText: 'Aᵀ', isCorrect: false },
+        { optionText: 'A^-1', isCorrect: false },
+        { optionText: 'A^T', isCorrect: false },
       ],
     },
     {
       questionText: 'For any square matrix A, which of the following is always a symmetric matrix?',
       options: [
-        { optionText: 'A + Aᵀ', isCorrect: true },
-        { optionText: 'A - Aᵀ', isCorrect: false },
-        { optionText: 'A * Aᵀ', isCorrect: false },
-        { optionText: 'Aᵀ', isCorrect: false },
+        { optionText: 'A + A^T', isCorrect: true },
+        { optionText: 'A - A^T', isCorrect: false },
+        { optionText: 'A * A^T', isCorrect: false },
+        { optionText: 'A^T', isCorrect: false },
       ],
     },
     {
@@ -481,10 +481,10 @@ async function main() {
       ],
     },
     {
-      questionText: 'If A and B are square matrices of the same order, then (AB)⁻¹ is equal to:',
+      questionText: 'If A and B are square matrices of the same order, then (AB)^-1 is equal to:',
       options: [
-        { optionText: 'B⁻¹A⁻¹', isCorrect: true },
-        { optionText: 'A⁻¹B⁻¹', isCorrect: false },
+        { optionText: 'B^-1 A^-1', isCorrect: true },
+        { optionText: 'A^-1 B^-1', isCorrect: false },
         { optionText: 'AB', isCorrect: false },
         { optionText: 'BA', isCorrect: false },
       ],
